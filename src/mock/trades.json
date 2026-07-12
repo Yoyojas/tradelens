@@ -1,0 +1,128 @@
+[
+  {
+    "id": "t_1", "userId": "u_1", "playbookId": "pb_1", "ticker": "AAPL", "side": "long",
+    "quantity": 100, "entryPrice": 180.50, "exitPrice": 195.00,
+    "openDate": "2026-02-01", "closeDate": "2026-02-20", "fees": 2.00,
+    "notes": "Clean breakout above January resistance on strong volume.", "tags": [],
+    "createdAt": "2026-02-01T14:30:00Z"
+  },
+  {
+    "id": "t_2", "userId": "u_1", "playbookId": "pb_3", "ticker": "MSFT", "side": "long",
+    "quantity": 50, "entryPrice": 410.00, "exitPrice": 425.00,
+    "openDate": "2026-01-15", "closeDate": "2026-03-01", "fees": 1.50,
+    "notes": "Held the trend while MAs stayed stacked.", "tags": [],
+    "createdAt": "2026-01-15T15:00:00Z"
+  },
+  {
+    "id": "t_3", "userId": "u_1", "playbookId": "pb_2", "ticker": "TSLA", "side": "short",
+    "quantity": 40, "entryPrice": 250.00, "exitPrice": 230.00,
+    "openDate": "2026-02-10", "closeDate": "2026-02-13", "fees": 2.00,
+    "notes": "Faded an overextended spike back to the mean.", "tags": [],
+    "createdAt": "2026-02-10T16:00:00Z"
+  },
+  {
+    "id": "t_4", "userId": "u_1", "playbookId": "pb_4", "ticker": "NVDA", "side": "long",
+    "quantity": 30, "entryPrice": 120.00, "exitPrice": 110.00,
+    "openDate": "2026-02-05", "closeDate": "2026-02-06", "fees": 1.50,
+    "notes": "Earnings gap failed the opening range; stopped out next day.", "tags": [],
+    "createdAt": "2026-02-05T14:35:00Z"
+  },
+  {
+    "id": "t_5", "userId": "u_1", "playbookId": "pb_1", "ticker": "AMD", "side": "long",
+    "quantity": 80, "entryPrice": 170.00, "exitPrice": 162.00,
+    "openDate": "2026-01-20", "closeDate": "2026-01-28", "fees": 2.00,
+    "notes": "Breakout failed and rolled back under the level.", "tags": [],
+    "createdAt": "2026-01-20T14:40:00Z"
+  },
+  {
+    "id": "t_6", "userId": "u_1", "playbookId": "pb_3", "ticker": "META", "side": "long",
+    "quantity": 25, "entryPrice": 480.00, "exitPrice": 510.00,
+    "openDate": "2026-01-10", "closeDate": "2026-02-25", "fees": 1.50,
+    "notes": "Trend hold, exited on first close under the 50-day.", "tags": [],
+    "createdAt": "2026-01-10T15:10:00Z"
+  },
+  {
+    "id": "t_7", "userId": "u_1", "playbookId": "pb_8", "ticker": "GOOGL", "side": "long",
+    "quantity": 60, "entryPrice": 150.00, "exitPrice": 158.00,
+    "openDate": "2026-03-01", "closeDate": "2026-03-05", "fees": 2.00,
+    "notes": "Bought the oversold dip, sold into the bounce.", "tags": [],
+    "createdAt": "2026-03-01T14:45:00Z"
+  },
+  {
+    "id": "t_8", "userId": "u_1", "playbookId": "pb_8", "ticker": "AMZN", "side": "long",
+    "quantity": 40, "entryPrice": 175.00, "exitPrice": 170.00,
+    "openDate": "2026-03-02", "closeDate": "2026-03-10", "fees": 1.50,
+    "notes": "Bounce never materialized; cut at the stop.", "tags": [],
+    "createdAt": "2026-03-02T14:50:00Z"
+  },
+  {
+    "id": "t_9", "userId": "u_1", "playbookId": "pb_7", "ticker": "SPY", "side": "long",
+    "quantity": 20, "entryPrice": 520.00, "exitPrice": 535.00,
+    "openDate": "2026-01-05", "closeDate": "2026-03-15", "fees": 1.00,
+    "notes": "Core rotation hold through the quarter.", "tags": [],
+    "createdAt": "2026-01-05T15:30:00Z"
+  },
+  {
+    "id": "t_10", "userId": "u_1", "playbookId": "pb_6", "ticker": "COIN", "side": "long",
+    "quantity": 15, "entryPrice": 220.00, "exitPrice": 260.00,
+    "openDate": "2026-02-15", "closeDate": "2026-02-22", "fees": 2.00,
+    "notes": "Momentum continuation on a new local high.", "tags": [],
+    "createdAt": "2026-02-15T16:05:00Z"
+  },
+  {
+    "id": "t_11", "userId": "u_1", "playbookId": "pb_2", "ticker": "BABA", "side": "short",
+    "quantity": 50, "entryPrice": 80.00, "exitPrice": 85.00,
+    "openDate": "2026-02-20", "closeDate": "2026-02-24", "fees": 2.00,
+    "notes": "Reversion short squeezed against me.", "tags": [],
+    "createdAt": "2026-02-20T15:20:00Z"
+  },
+  {
+    "id": "t_12", "userId": "u_1", "playbookId": "pb_4", "ticker": "NFLX", "side": "long",
+    "quantity": 10, "entryPrice": 600.00, "exitPrice": 640.00,
+    "openDate": "2026-03-12", "closeDate": "2026-03-14", "fees": 1.50,
+    "notes": "Earnings gap held the range and ran two days.", "tags": [],
+    "createdAt": "2026-03-12T14:35:00Z"
+  },
+  {
+    "id": "t_13", "userId": "u_1", "playbookId": "pb_5", "ticker": "INTC", "side": "long",
+    "quantity": 200, "entryPrice": 22.00, "exitPrice": 20.50,
+    "openDate": "2026-01-08", "closeDate": "2026-03-20", "fees": 2.00,
+    "notes": "Value thesis broke; exited on a guidance cut.", "tags": [],
+    "createdAt": "2026-01-08T15:00:00Z"
+  },
+  {
+    "id": "t_14", "userId": "u_1", "playbookId": "pb_1", "ticker": "AAPL", "side": "long",
+    "quantity": 50, "entryPrice": 190.00, "exitPrice": 205.00,
+    "openDate": "2026-03-18", "closeDate": "2026-04-02", "fees": 1.50,
+    "notes": "Second breakout entry, trailed the stop higher.", "tags": [],
+    "createdAt": "2026-03-18T14:40:00Z"
+  },
+  {
+    "id": "t_15", "userId": "u_1", "playbookId": "pb_8", "ticker": "TSLA", "side": "long",
+    "quantity": 20, "entryPrice": 240.00, "exitPrice": 235.00,
+    "openDate": "2026-03-22", "closeDate": "2026-03-25", "fees": 2.00,
+    "notes": "Oversold bounce stalled; small loss.", "tags": [],
+    "createdAt": "2026-03-22T15:00:00Z"
+  },
+  {
+    "id": "t_16", "userId": "u_1", "playbookId": "pb_1", "ticker": "NVDA", "side": "long",
+    "quantity": 25, "entryPrice": 135.00, "exitPrice": null,
+    "openDate": "2026-04-10", "closeDate": null, "fees": 1.50,
+    "notes": "Open breakout position, trailing a stop.", "tags": [],
+    "createdAt": "2026-04-10T14:30:00Z"
+  },
+  {
+    "id": "t_17", "userId": "u_1", "playbookId": "pb_5", "ticker": "MSFT", "side": "long",
+    "quantity": 15, "entryPrice": 430.00, "exitPrice": null,
+    "openDate": "2026-04-15", "closeDate": null, "fees": 1.50,
+    "notes": "Long-term value hold, still open.", "tags": [],
+    "createdAt": "2026-04-15T15:00:00Z"
+  },
+  {
+    "id": "t_18", "userId": "u_1", "playbookId": "pb_7", "ticker": "SPY", "side": "long",
+    "quantity": 10, "entryPrice": 540.00, "exitPrice": null,
+    "openDate": "2026-04-20", "closeDate": null, "fees": 1.00,
+    "notes": "Fresh rotation leg, open.", "tags": [],
+    "createdAt": "2026-04-20T15:30:00Z"
+  }
+]

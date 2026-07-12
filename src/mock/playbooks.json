@@ -1,0 +1,210 @@
+[
+  {
+    "id": "pb_1",
+    "name": "Breakout Momentum",
+    "name_zh": "突破动量",
+    "category": "Momentum",
+    "market": "US Equities",
+    "riskLevel": "Medium",
+    "summary": "Buy on high-volume breakouts above a defined resistance level.",
+    "summary_zh": "在放量突破关键阻力位时买入。",
+    "description": "Enter when price closes above a multi-week resistance level on above-average volume. The thesis is that a clean breakout attracts continuation buyers. Size positions so a stop just below the breakout level risks no more than 1% of account equity.",
+    "description_zh": "当价格在高于均量的成交量下收于多周阻力位之上时入场。逻辑是一次干净的突破会吸引追随买盘。仓位规模应使止损设在突破位下方时，单笔风险不超过账户权益的 1%。",
+    "rules": [
+      "Entry: close above resistance on >1.5x average volume",
+      "Exit: trailing stop under the most recent higher low",
+      "Stop: hard stop just below the breakout level"
+    ],
+    "rules_zh": [
+      "入场：以高于 1.5 倍均量的成交量收于阻力位之上",
+      "出场：在最近一个更高低点下方设移动止损",
+      "止损：在突破位正下方设硬止损"
+    ],
+    "tags": ["breakout", "volume"],
+    "isCurated": true,
+    "createdBy": "admin",
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "pb_2",
+    "name": "Mean Reversion Swing",
+    "name_zh": "均值回归波段",
+    "category": "Mean Reversion",
+    "market": "US Equities",
+    "riskLevel": "Medium",
+    "summary": "Fade short-term extremes back toward a moving-average mean.",
+    "summary_zh": "在短期极端价位回归均线时反向介入。",
+    "description": "Short extended names that are stretched far above their 20-day moving average, or buy names stretched far below. Targets a reversion to the mean over a few days. Best in range-bound, non-trending markets.",
+    "description_zh": "做空远高于 20 日均线、过度拉伸的标的，或买入远低于均线的标的，目标是数日内回归均值。最适合震荡、无明显趋势的市场。",
+    "rules": [
+      "Entry: price > 2 standard deviations from the 20-day mean",
+      "Exit: price touches the 20-day moving average",
+      "Stop: a further 1 standard deviation against the position"
+    ],
+    "rules_zh": [
+      "入场：价格偏离 20 日均值超过 2 个标准差",
+      "出场：价格触及 20 日均线",
+      "止损：价格再朝不利方向运行 1 个标准差"
+    ],
+    "tags": ["mean-reversion"],
+    "isCurated": true,
+    "createdBy": "admin",
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "pb_3",
+    "name": "Trend Following",
+    "name_zh": "趋势跟踪",
+    "category": "Trend",
+    "market": "US Equities",
+    "riskLevel": "Low",
+    "summary": "Ride established uptrends using moving-average alignment.",
+    "summary_zh": "借助均线多头排列顺势持有上升趋势。",
+    "description": "Hold positions while the 20/50/200-day moving averages stay stacked in bullish order. Add on pullbacks to the 20-day. A patient strategy with longer holding periods and fewer trades.",
+    "description_zh": "在 20/50/200 日均线保持多头排列期间持有仓位，回调至 20 日均线时加仓。这是一种持有周期较长、交易频率较低的耐心策略。",
+    "rules": [
+      "Entry: pullback to rising 20-day while 50 > 200",
+      "Exit: close below the 50-day moving average",
+      "Stop: close below the 200-day moving average"
+    ],
+    "rules_zh": [
+      "入场：50 日均线在 200 日均线之上，且价格回调至向上的 20 日均线",
+      "出场：收盘跌破 50 日均线",
+      "止损：收盘跌破 200 日均线"
+    ],
+    "tags": ["trend"],
+    "isCurated": true,
+    "createdBy": "admin",
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "pb_4",
+    "name": "Earnings Gap",
+    "name_zh": "财报跳空",
+    "category": "Event-Driven",
+    "market": "US Equities",
+    "riskLevel": "High",
+    "summary": "Trade the post-earnings reaction in the first session or two.",
+    "summary_zh": "在财报发布后的头一两个交易日内交易其反应。",
+    "description": "Enter the morning after an earnings report when price gaps in the direction of the surprise and holds the opening range. High variance — keep size small and exits fast.",
+    "description_zh": "在财报公布次日早盘，当价格沿超预期方向跳空并守住开盘区间时入场。波动极大——保持小仓位、快速离场。",
+    "rules": [
+      "Entry: gap holds above the opening 30-minute range",
+      "Exit: same-day or next-day on momentum stall",
+      "Stop: loss of the opening range low"
+    ],
+    "rules_zh": [
+      "入场：跳空后守住开盘前 30 分钟区间上沿",
+      "出场：动能停滞时当日或次日了结",
+      "止损：跌破开盘区间下沿"
+    ],
+    "tags": ["earnings"],
+    "isCurated": true,
+    "createdBy": "admin",
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "pb_5",
+    "name": "Dividend Value Hold",
+    "name_zh": "股息价值持有",
+    "category": "Value",
+    "market": "US Equities",
+    "riskLevel": "Low",
+    "summary": "Hold undervalued dividend payers for longer-term mean reversion.",
+    "summary_zh": "长期持有被低估的高股息股票，等待价值回归。",
+    "description": "Accumulate quality dividend payers trading below historical valuation multiples. Long holding period with income while waiting for re-rating. Lowest turnover strategy in the library.",
+    "description_zh": "在估值倍数低于历史水平时分批买入优质高股息标的，长期持有以获取股息收入并等待估值修复。这是库内换手率最低的策略。",
+    "rules": [
+      "Entry: P/E below 5-year average with stable payout",
+      "Exit: valuation re-rates to fair value",
+      "Stop: dividend cut or thesis break"
+    ],
+    "rules_zh": [
+      "入场：市盈率低于五年均值且派息稳定",
+      "出场：估值修复至合理价值",
+      "止损：减派股息或逻辑被破坏"
+    ],
+    "tags": ["value"],
+    "isCurated": true,
+    "createdBy": "admin",
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "pb_6",
+    "name": "Crypto Momentum",
+    "name_zh": "加密动量",
+    "category": "Momentum",
+    "market": "Crypto",
+    "riskLevel": "High",
+    "summary": "Momentum continuation on liquid crypto proxies and majors.",
+    "summary_zh": "在流动性高的加密主流币上做动量延续。",
+    "description": "Buy strength in liquid crypto names breaking to new local highs. Highly volatile — use smaller position sizes and wider stops to account for 24/7 swings.",
+    "description_zh": "在流动性高、突破阶段性新高的加密标的上追强势。波动极高——采用更小仓位与更宽止损，以应对 7×24 小时的波动。",
+    "rules": [
+      "Entry: break to a new 10-day high",
+      "Exit: trailing stop on a 3-day low",
+      "Stop: fixed percentage stop sized for volatility"
+    ],
+    "rules_zh": [
+      "入场：突破 10 日新高",
+      "出场：以 3 日低点设移动止损",
+      "止损：按波动率设定的固定百分比止损"
+    ],
+    "tags": ["crypto", "breakout"],
+    "isCurated": true,
+    "createdBy": "admin",
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "pb_7",
+    "name": "Sector ETF Rotation",
+    "name_zh": "板块 ETF 轮动",
+    "category": "Macro",
+    "market": "ETFs",
+    "riskLevel": "Low",
+    "summary": "Rotate into the strongest sector ETFs on a monthly cadence.",
+    "summary_zh": "按月轮动到表现最强的板块 ETF。",
+    "description": "Rank sector and index ETFs by trailing relative strength and hold the leaders. Rebalance monthly. A diversified, lower-volatility approach with broad-market holdings.",
+    "description_zh": "按过去一段时间的相对强度对板块与指数 ETF 排名并持有领先者，每月再平衡。这是一种持仓分散、波动较低、覆盖大盘的方法。",
+    "rules": [
+      "Entry: top-quartile trailing 3-month relative strength",
+      "Exit: drops out of the top half on monthly review",
+      "Stop: broad-market regime turns risk-off"
+    ],
+    "rules_zh": [
+      "入场：过去 3 个月相对强度位列前四分之一",
+      "出场：月度复盘时跌出前二分之一",
+      "止损：大盘环境转为避险"
+    ],
+    "tags": ["macro", "trend"],
+    "isCurated": true,
+    "createdBy": "admin",
+    "createdAt": "2026-01-01T00:00:00Z"
+  },
+  {
+    "id": "pb_8",
+    "name": "Oversold Bounce",
+    "name_zh": "超卖反弹",
+    "category": "Mean Reversion",
+    "market": "US Equities",
+    "riskLevel": "Medium",
+    "summary": "Buy short-term oversold dips in otherwise strong names.",
+    "summary_zh": "在原本强势的标的中买入短期超卖回调。",
+    "description": "Buy quality uptrending names when a fast oscillator hits oversold on a multi-day pullback. Targets a quick bounce over a few days rather than a long hold.",
+    "description_zh": "当快速摆动指标在多日回调中进入超卖时，买入处于上升趋势的优质标的。目标是数日内的快速反弹，而非长期持有。",
+    "rules": [
+      "Entry: RSI(2) oversold within a longer-term uptrend",
+      "Exit: bounce into the prior swing high or 3-5 day target",
+      "Stop: a close below the recent pullback low"
+    ],
+    "rules_zh": [
+      "入场：长期上升趋势中 RSI(2) 进入超卖",
+      "出场：反弹至前高或达到 3–5 日目标",
+      "止损：收盘跌破近期回调低点"
+    ],
+    "tags": ["oversold", "mean-reversion"],
+    "isCurated": true,
+    "createdBy": "admin",
+    "createdAt": "2026-01-01T00:00:00Z"
+  }
+]

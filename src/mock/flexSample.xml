@@ -1,0 +1,15 @@
+<FlexQueryResponse queryName="TradeLens demo sample" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U0000000" fromDate="2026-03-02" toDate="2026-04-10" period="Custom">
+      <Trades>
+        <Trade accountId="U0000000" assetCategory="STK" symbol="AAPL" tradeID="9001" dateTime="20260302;093105" buySell="BUY" quantity="100" tradePrice="182.50" ibCommission="-1.00" currency="USD" />
+        <Trade accountId="U0000000" assetCategory="STK" symbol="AAPL" tradeID="9002" dateTime="20260318;104210" buySell="SELL" quantity="-60" tradePrice="191.20" ibCommission="-0.80" currency="USD" />
+        <Trade accountId="U0000000" assetCategory="STK" symbol="AAPL" tradeID="9003" dateTime="20260402;143355" buySell="SELL" quantity="-40" tradePrice="188.00" ibCommission="-0.60" currency="USD" />
+        <Trade accountId="U0000000" assetCategory="STK" symbol="TSLA" tradeID="9004" dateTime="20260305;101500" buySell="SELL" quantity="-50" tradePrice="240.00" ibCommission="-1.20" currency="USD" />
+        <Trade accountId="U0000000" assetCategory="STK" symbol="TSLA" tradeID="9005" dateTime="20260325;153020" buySell="BUY" quantity="30" tradePrice="225.50" ibCommission="-0.90" currency="USD" />
+        <Trade accountId="U0000000" assetCategory="STK" symbol="NVDA" tradeID="9006" dateTime="20260408;112240" buySell="BUY" quantity="15" tradePrice="118.40" ibCommission="-0.70" currency="USD" />
+        <Trade accountId="U0000000" assetCategory="OPT" symbol="AAPL 260417C00190000" tradeID="9007" dateTime="20260320;100000" buySell="BUY" quantity="1" tradePrice="4.20" ibCommission="-0.65" currency="USD" />
+      </Trades>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

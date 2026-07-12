@@ -1,0 +1,176 @@
+/* Account settings page */
+
+.set-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  margin-top: var(--space-4);
+  max-width: 480px;
+}
+
+.set-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+
+.set-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.set-ok {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.88rem;
+}
+
+.set-err {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid var(--color-danger);
+  color: #fca5a5;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.88rem;
+}
+
+.set-submit {
+  align-self: flex-start;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 600;
+  cursor: pointer;
+}
+.set-submit:hover {
+  background: var(--color-primary-hover);
+}
+.set-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.set-secondary {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+.set-secondary:hover {
+  border-color: var(--color-primary);
+}
+
+.set-oauth-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.set-muted {
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+/* Device sessions */
+.set-devices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.set-device-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.set-device {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.set-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.set-device-name {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.set-device-current {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: 999px;
+  padding: 0 8px;
+}
+
+.set-device-seen {
+  font-size: 0.82rem;
+}
+
+.set-danger-text {
+  color: var(--color-danger);
+  align-self: flex-start;
+}
+
+/* Danger zone */
+.set-card-danger {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.set-heading-danger {
+  color: var(--color-danger);
+}
+
+.set-delete-btn {
+  align-self: flex-start;
+  background: var(--color-danger);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 600;
+  cursor: pointer;
+}
+.set-delete-btn:hover {
+  filter: brightness(1.1);
+}
+.set-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.set-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 380px;
+}
+
+.set-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}

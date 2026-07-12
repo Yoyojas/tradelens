@@ -1,0 +1,15 @@
+# Secrets / deployment config — never commit
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Any real account exports / dumps — never commit broker data
+exports/
+*.account.json
+*.positions.json
+*.executions.json
+*flex*.xml

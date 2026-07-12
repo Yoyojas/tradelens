@@ -1,0 +1,11 @@
+[
+  { "id": "tag_breakout", "label": "breakout", "color": "#3b82f6" },
+  { "id": "tag_volume", "label": "volume", "color": "#8b5cf6" },
+  { "id": "tag_reversion", "label": "mean-reversion", "color": "#06b6d4" },
+  { "id": "tag_trend", "label": "trend", "color": "#22c55e" },
+  { "id": "tag_earnings", "label": "earnings", "color": "#f59e0b" },
+  { "id": "tag_value", "label": "value", "color": "#eab308" },
+  { "id": "tag_macro", "label": "macro", "color": "#ec4899" },
+  { "id": "tag_crypto", "label": "crypto", "color": "#f97316" },
+  { "id": "tag_oversold", "label": "oversold", "color": "#14b8a6" }
+]

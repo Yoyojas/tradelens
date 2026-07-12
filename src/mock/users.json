@@ -1,0 +1,20 @@
+[
+  {
+    "id": "u_1",
+    "email": "demo@tradelens.app",
+    "displayName": "Demo Investor",
+    "password": "demo123",
+    "role": "user",
+    "adoptedPlaybookIds": ["pb_1", "pb_3", "pb_8", "pb_7"],
+    "createdAt": "2026-01-10T00:00:00Z"
+  },
+  {
+    "id": "u_admin",
+    "email": "admin@tradelens.app",
+    "displayName": "Platform Admin",
+    "password": "admin123",
+    "role": "admin",
+    "adoptedPlaybookIds": [],
+    "createdAt": "2026-01-01T00:00:00Z"
+  }
+]

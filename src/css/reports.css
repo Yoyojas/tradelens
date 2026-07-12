@@ -1,0 +1,108 @@
+/* ── Playbook selector ───────────────────────────────────────── */
+.rp-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-5) 0;
+}
+.rp-seg {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.rp-seg:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+.rp-seg-on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.rp-seg-on:hover {
+  color: #fff;
+}
+
+/* ── Metric cards ────────────────────────────────────────────── */
+.rp-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+}
+.metric-label {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.metric-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.metric-pos {
+  color: var(--color-success);
+}
+.metric-neg {
+  color: var(--color-danger);
+}
+.metric-sub {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Charts ──────────────────────────────────────────────────── */
+.rp-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-4);
+}
+.rp-chart-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+}
+.rp-chart-title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.rp-chart-sub {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-4);
+}
+.rp-chart-area {
+  height: 260px;
+}
+.rp-chart-empty {
+  height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.rp-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: var(--space-6);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  margin-top: var(--space-5);
+}

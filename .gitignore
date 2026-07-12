@@ -1,0 +1,18 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vite
+
+# Backend secrets / Python / real broker data — never commit
+backend/.env
+backend/.venv/
+backend/venv/
+**/__pycache__/
+*.pyc
+backend/exports/
+*flex*.xml
+*.account.json
+*.positions.json
+*.executions.json

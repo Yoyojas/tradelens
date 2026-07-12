@@ -1,0 +1,310 @@
+/* ── Trade form ──────────────────────────────────────────────── */
+.tf-form {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.tf-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+}
+
+.tf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.tf-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tf-label {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.tf-input {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-size: 0.92rem;
+  font-family: inherit;
+  width: 100%;
+}
+.tf-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.tf-textarea {
+  resize: vertical;
+}
+
+.tf-error {
+  color: var(--color-danger);
+  font-size: 0.78rem;
+}
+
+.tf-hint {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.tf-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+}
+.tf-saved {
+  color: var(--color-success);
+  font-size: 0.88rem;
+}
+.tf-submit {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-5);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tf-submit:hover {
+  background: var(--color-primary-hover);
+}
+
+/* ── History section ─────────────────────────────────────────── */
+.tl-section {
+  margin-top: var(--space-4);
+}
+.tl-heading {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+}
+
+.tl-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.tl-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+.tl-filter input,
+.tl-filter select {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.tl-filter input:focus,
+.tl-filter select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.tl-result-count {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+.tl-reset {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.tl-reset:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+
+/* ── History table ───────────────────────────────────────────── */
+.tl-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.tl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+.tl-table th,
+.tl-table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+.tl-table th {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.tl-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.tl-table tbody tr:hover {
+  background: var(--color-surface);
+}
+
+.tl-num {
+  text-align: right;
+}
+.tl-ticker {
+  font-weight: 600;
+}
+.tl-playbook {
+  color: var(--color-text-muted);
+}
+
+.tl-side {
+  text-transform: capitalize;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+}
+.tl-side-long {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+.tl-side-short {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.tl-open-tag {
+  font-size: 0.78rem;
+  color: var(--color-warning);
+}
+
+.tl-pnl {
+  font-weight: 600;
+}
+.tl-pos {
+  color: var(--color-success);
+}
+.tl-neg {
+  color: var(--color-danger);
+}
+
+.tl-delete {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.tl-delete:hover {
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.tl-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: var(--space-6);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+}
+
+/* ── Delete confirm modal ────────────────────────────────────── */
+.tl-confirm-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+.tl-confirm-body {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-5);
+}
+.tl-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+.tl-cancel {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+.tl-cancel:hover {
+  border-color: var(--color-text-muted);
+}
+.tl-confirm-delete {
+  background: var(--color-danger);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tl-confirm-delete:hover {
+  filter: brightness(1.1);
+}
+
+/* Pagination: load-more control under the history table */
+.tl-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.tl-loaded-count {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.tl-load-more-btn {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tl-load-more-btn:hover {
+  border-color: var(--color-primary);
+}
+.tl-load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

@@ -1,0 +1,198 @@
+/* ── Header ──────────────────────────────────────────────────── */
+.adm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.adm-btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.adm-btn-primary:hover {
+  background: var(--color-primary-hover);
+}
+.adm-btn-secondary {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+.adm-btn-secondary:hover {
+  border-color: var(--color-text-muted);
+}
+.adm-btn-danger {
+  background: var(--color-danger);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 600;
+  cursor: pointer;
+}
+.adm-btn-danger:hover {
+  filter: brightness(1.1);
+}
+.adm-btn-link {
+  background: transparent;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 0.88rem;
+  padding: var(--space-1) var(--space-2);
+}
+.adm-btn-link:hover {
+  text-decoration: underline;
+}
+.adm-danger {
+  color: var(--color-danger);
+}
+
+/* ── Table ───────────────────────────────────────────────────── */
+.adm-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+.adm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+.adm-table th,
+.adm-table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+.adm-table th {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.adm-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.adm-table tbody tr:hover {
+  background: var(--color-surface);
+}
+.adm-name {
+  font-weight: 600;
+}
+.adm-muted {
+  color: var(--color-text-muted);
+}
+.adm-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.adm-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: var(--space-6);
+}
+
+/* ── Editor modal ────────────────────────────────────────────── */
+.adm-editor-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+  padding-right: var(--space-6);
+}
+.adm-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.adm-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+.adm-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.adm-label {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+.adm-input {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-size: 0.92rem;
+  font-family: inherit;
+  width: 100%;
+}
+.adm-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.adm-textarea {
+  resize: vertical;
+}
+.adm-error {
+  color: var(--color-danger);
+  font-size: 0.78rem;
+}
+.adm-zh-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+  margin-top: var(--space-1);
+}
+.adm-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* ── Delete confirm ──────────────────────────────────────────── */
+.adm-confirm-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+}
+.adm-confirm-body {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-5);
+}
+.adm-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* Transient banner when an admin API call fails */
+.adm-request-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid var(--color-danger);
+  color: #fca5a5;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.88rem;
+  margin-bottom: var(--space-3);
+}
