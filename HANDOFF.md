@@ -8,6 +8,7 @@ Cowork（分析/规格/审阅）与 Claude Code（开发执行）的正式交接
 
 | Task ID | 标题 | 状态 | 备注 |
 |---|---|---|---|
+| TL-PROC-002 | GPT 进度可见性：HANDOFF 改经 GitHub raw 地址读取 | DELIVERED | 规程 §9.5 已改；待用户 push 并在 GPT 端验证读取 |
 | TL-BUG-001 | seed 幂等不回填老种子账号的 email_verified_at（demo 被 /verify 卡住） | PROPOSED | 用户已用 SQL 临时解锁本机 demo；待批准后修 seed.py 回填逻辑 |
 | TL-DISC-001 | 用户功能优化审计（Discovery） | PROPOSED | 报告见 ../docs/TL-DISC-001_功能优化审计.md，待用户选路线 |
 | TL-PROC-001 | 双 Agent 工作流优化 | DELIVERED | 待用户确认工作流整理结果 |
