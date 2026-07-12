@@ -16,3 +16,4 @@ backend/exports/
 *.account.json
 *.positions.json
 *.executions.json
+vite.config.js.timestamp-*
