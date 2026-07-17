@@ -43,7 +43,22 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/tradelens"
 # Where to send the browser back after a completed OAuth flow. Keep this on
 # 127.0.0.1 (not localhost): the session cookie is host-scoped to 127.0.0.1,
 # so the app must be used from the same host for the cookie to be first-party.
+# In production this is https://mytradelens.app (same origin as the API).
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://127.0.0.1:5173")
+
+# Production hardening (TL-DEPLOY-001). Both default off so local dev is
+# untouched; the Container App sets them via env/secrets.
+# - COOKIE_SECURE: session cookie only over https (defaults on when
+#   FRONTEND_URL is https, overridable).
+# - TRUST_PROXY: honor X-Forwarded-Proto/Host from the ingress (ACA) so
+#   OAuth redirect URIs and Secure cookies see https, not the pod's http.
+_secure_default = "1" if FRONTEND_URL.startswith("https") else "0"
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", _secure_default).lower() not in (
+    "0",
+    "false",
+    "",
+)
+TRUST_PROXY = os.environ.get("TRUST_PROXY", "0").lower() not in ("0", "false", "")
 
 # Google OAuth (authorization code flow, handled entirely by this backend).
 # Create credentials in Google Cloud Console with this exact redirect URI.
@@ -56,6 +71,33 @@ GOOGLE_REDIRECT_URI = os.environ.get(
 # Seed admin account (see seed.py). Kept out of source on purpose.
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
+# Master key for RECOVERABLE encryption of stored IBKR Flex tokens
+# (TL-DATA-004): the daily sync must decrypt them, so hashing is not an
+# option. Locally: generate once with
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# and put it in backend/.env as FLEX_TOKEN_KEY. In production it lives in
+# Container Apps Secrets. Unset -> broker-connection features answer
+# flex_key_missing instead of storing anything unprotected.
+FLEX_TOKEN_KEY = os.environ.get("FLEX_TOKEN_KEY", "")
+
+# Alpaca market data (TL-DATA-005, D-020): Basic plan = IEX feed. Keys stay
+# server-side only (Secrets in production, backend/.env locally) — the browser
+# talks to OUR /api/quotes proxy, never to Alpaca. Unset -> quote endpoints
+# answer quotes_not_configured and the UI shows a translated notice.
+ALPACA_KEY_ID = os.environ.get("ALPACA_KEY_ID", "")
+ALPACA_SECRET = os.environ.get("ALPACA_SECRET", "")
+
+# Shared secret for the scheduled-job trigger endpoint (TL-DEPLOY-001 AWS
+# rework): EventBridge Scheduler calls POST /api/jobs/sync-flex with this
+# value in the X-Job-Secret header. Not a session; grants exactly one power —
+# starting the daily Flex sync. Unset -> the endpoint always answers 401.
+JOB_SECRET = os.environ.get("JOB_SECRET", "")
+
+# Snapshot-push anti-replay window in seconds (TL-DATA-006): the pushed
+# timestamp must be within ±this of server time. Configurable because clock
+# skew on the user's machine is the most likely failure mode.
+PUSH_REPLAY_WINDOW = _int("PUSH_REPLAY_WINDOW", 300)
 
 # Outgoing mail (verification / password-reset codes). Gmail SMTP by default;
 # MAIL_APP_PASSWORD is a Google "app password", not the account password.

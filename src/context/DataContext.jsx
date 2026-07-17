@@ -10,6 +10,7 @@ import * as dataApi from '../services/data.js'
 import * as legacy from '../services/api.js'
 import { useAuth } from './AuthContext.jsx'
 import MigrationPrompt from '../components/MigrationPrompt.jsx'
+import { formToPayload } from '../components/journal/TradeFormFields.jsx'
 
 // Server-backed data layer (Milestone 2 step 2). Trades, adoptions, playbooks
 // and tags come from the Flask API, scoped per account by the session cookie.
@@ -123,28 +124,96 @@ export function DataProvider({ children }) {
     }
   }
 
+  // ── Tags (user-scoped; shared templates are read-only) ───────
+  async function refreshTags() {
+    const uid = userId
+    const res = await dataApi.fetchTags().catch(() => null)
+    if (res && stillCurrent(uid)) setTags(res.tags)
+  }
+
+  const byLabel = (a, b) => a.label.localeCompare(b.label)
+
+  async function createTag(label) {
+    const uid = userId
+    const tag = await dataApi.createTag(label)
+    if (stillCurrent(uid)) setTags((prev) => [...prev, tag].sort(byLabel))
+    return tag
+  }
+
+  // Rename/delete also patch the labels embedded in the loaded trade window
+  // locally, so the Journal stays consistent without resetting pagination.
+  async function renameTag(id, label) {
+    const uid = userId
+    const before = tags.find((tag) => tag.id === id)
+    const updated = await dataApi.updateTag(id, { label })
+    if (stillCurrent(uid)) {
+      setTags((prev) =>
+        prev.map((tag) => (tag.id === id ? updated : tag)).sort(byLabel),
+      )
+      if (before) {
+        setTrades((prev) =>
+          prev.map((trade) =>
+            trade.tags?.includes(before.label)
+              ? {
+                  ...trade,
+                  tags: trade.tags.map((l) =>
+                    l === before.label ? updated.label : l,
+                  ),
+                }
+              : trade,
+          ),
+        )
+      }
+    }
+    return updated
+  }
+
+  async function deleteTag(id) {
+    const uid = userId
+    const victim = tags.find((tag) => tag.id === id)
+    await dataApi.deleteTag(id)
+    if (stillCurrent(uid)) {
+      setTags((prev) => prev.filter((tag) => tag.id !== id))
+      if (victim) {
+        setTrades((prev) =>
+          prev.map((trade) =>
+            trade.tags?.includes(victim.label)
+              ? { ...trade, tags: trade.tags.filter((l) => l !== victim.label) }
+              : trade,
+          ),
+        )
+      }
+    }
+  }
+
   // ── Trade actions (server-first) ─────────────────────────────
   async function addTrade(form) {
     const uid = userId
     const trade = await dataApi.createTrade({
-      playbookId: form.playbookId || null,
-      ticker: form.ticker,
-      side: form.side,
-      quantity: form.quantity,
-      entryPrice: form.entryPrice,
-      exitPrice: form.exitPrice === '' ? null : form.exitPrice,
-      openDate: form.openDate,
-      closeDate: form.closeDate || null,
-      fees: form.fees === '' ? null : form.fees,
-      notes: form.notes?.trim() || '',
-      tags: form.tags || [],
+      ...formToPayload(form),
       source: 'manual',
     })
     if (stillCurrent(uid)) {
       setTrades((prev) => [trade, ...prev])
       setTradesTotal((n) => n + 1)
     }
+    // Tagging a trade may have created new user tags server-side.
+    if ((form.tags || []).length) refreshTags()
     return trade
+  }
+
+  // Edit in place. A PATCH never changes the row count, so the loaded window
+  // and `tradesTotal` stay put; we swap the row for the server's response
+  // (implementation choice per TL-FEAT-005: local replace, no refetch).
+  // Reports always refetch on mount, so they pick the edit up on next visit.
+  async function updateTrade(id, patch) {
+    const uid = userId
+    const updated = await dataApi.updateTrade(id, patch)
+    if (stillCurrent(uid)) {
+      setTrades((prev) => prev.map((t) => (t.id === id ? updated : t)))
+    }
+    if ((patch.tags || []).length) refreshTags()
+    return updated
   }
 
   async function deleteTrade(id) {
@@ -261,9 +330,14 @@ export function DataProvider({ children }) {
       adoptedPlaybookIds,
       adoptedPlaybooks,
       addTrade,
+      updateTrade,
       deleteTrade,
       importTrades,
       refreshTrades,
+      refreshTags,
+      createTag,
+      renameTag,
+      deleteTag,
       adoptPlaybook,
       unadoptPlaybook,
       isAdopted,

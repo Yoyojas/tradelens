@@ -23,6 +23,7 @@ export default function AppLayout() {
           <span className="app-brand-name">TradeLens</span>
         </div>
         <nav className="app-nav">
+          <NavLink to="/home" className="app-nav-link">{t('nav.home')}</NavLink>
           <NavLink to="/library" className="app-nav-link">{t('nav.library')}</NavLink>
           <NavLink to="/journal" className="app-nav-link">{t('nav.journal')}</NavLink>
           <NavLink to="/reports" className="app-nav-link">{t('nav.reports')}</NavLink>

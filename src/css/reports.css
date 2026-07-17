@@ -70,6 +70,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: var(--space-4);
+  margin-bottom: var(--space-4);
 }
 .rp-chart-card {
   background: var(--color-surface);
@@ -105,4 +106,69 @@
   border: 1px dashed var(--color-border);
   border-radius: var(--radius);
   margin-top: var(--space-5);
+}
+
+/* ── Realized-only section (TL-FEAT-007) ─────────────────────── */
+.rp-realized-note {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.rp-chart-full {
+  margin-bottom: var(--space-4);
+}
+
+.rp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.rp-table th,
+.rp-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+.rp-table th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.rp-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.rp-num {
+  text-align: right;
+}
+
+.rp-table-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Tag slice control (TL-FEAT-006/007) */
+.rp-tag-slice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+.rp-tag-slice select {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.rp-tag-slice select:focus {
+  outline: none;
+  border-color: var(--color-primary);
 }

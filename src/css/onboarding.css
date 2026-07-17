@@ -1,0 +1,182 @@
+/* Onboarding flow (TL-FEAT-008) — TradeLens' own dark visual system. */
+.ob-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  background: var(--color-bg);
+}
+
+.ob-card {
+  width: 100%;
+  max-width: 640px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-6);
+  margin-top: var(--space-6);
+}
+
+.ob-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+.ob-brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.ob-exit {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.ob-exit:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+
+/* Progress: width steps via data-step (1..8) — external CSS only. */
+.ob-progress {
+  height: 6px;
+  background: var(--color-surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.ob-progress-fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+.ob-progress-fill[data-step='1'] { width: 12.5%; }
+.ob-progress-fill[data-step='2'] { width: 25%; }
+.ob-progress-fill[data-step='3'] { width: 37.5%; }
+.ob-progress-fill[data-step='4'] { width: 50%; }
+.ob-progress-fill[data-step='5'] { width: 62.5%; }
+.ob-progress-fill[data-step='6'] { width: 75%; }
+.ob-progress-fill[data-step='7'] { width: 87.5%; }
+.ob-progress-fill[data-step='8'] { width: 100%; }
+
+.ob-step-label {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin: var(--space-2) 0 var(--space-5);
+}
+
+.ob-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+.ob-sub {
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+  margin-bottom: var(--space-5);
+}
+
+.ob-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+.ob-option {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  padding: var(--space-4);
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+}
+.ob-option:hover {
+  border-color: var(--color-text-muted);
+}
+.ob-option-on {
+  border-color: var(--color-primary);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.ob-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+.ob-actions-center {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ob-primary {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-6);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ob-primary:hover {
+  background: var(--color-primary-hover);
+}
+.ob-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ob-secondary {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  padding: var(--space-3) var(--space-5);
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+.ob-secondary:hover {
+  border-color: var(--color-text-muted);
+}
+.ob-secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ob-skip-link {
+  display: block;
+  margin: var(--space-4) auto 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.ob-skip-link:hover {
+  color: var(--color-text);
+}
+
+.ob-error {
+  color: var(--color-danger);
+  font-size: 0.85rem;
+  margin-top: var(--space-3);
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .ob-card {
+    padding: var(--space-4);
+    margin-top: var(--space-2);
+  }
+  .ob-options {
+    grid-template-columns: 1fr;
+  }
+}

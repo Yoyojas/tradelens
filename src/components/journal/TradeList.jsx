@@ -2,7 +2,7 @@ import TradeRow from './TradeRow.jsx'
 import { useLang } from '../../i18n/LanguageContext.jsx'
 
 // Trade-history table. `playbookNameById` maps id -> display name.
-export default function TradeList({ trades, playbookNameById, onDelete }) {
+export default function TradeList({ trades, playbookNameById, onEdit, onDelete }) {
   const { t } = useLang()
   if (trades.length === 0) {
     return <div className="tl-empty">{t('journal.empty')}</div>
@@ -32,6 +32,7 @@ export default function TradeList({ trades, playbookNameById, onDelete }) {
               key={t.id}
               trade={t}
               playbookName={playbookNameById[t.playbookId]}
+              onEdit={onEdit}
               onDelete={onDelete}
             />
           ))}

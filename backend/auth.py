@@ -25,14 +25,22 @@ import mailer
 from extensions import db, login_manager, oauth
 from models import (
     AuthCode,
+    BrokerConnection,
+    BrokerSyncDevice,
     ImportBatch,
     LoginAttempt,
+    PortfolioSnapshot,
+    PositionSnapshot,
     ReportSnapshot,
+    SyncRun,
+    Tag,
     Trade,
     TradeTag,
     User,
     UserPlaybook,
+    UserProfile,
     UserSession,
+    WatchlistItem,
     utcnow,
 )
 
@@ -462,10 +470,30 @@ def delete_account():
     db.session.query(TradeTag).filter(TradeTag.trade_id.in_(trade_ids)).delete(
         synchronize_session=False
     )
+    # User-owned tags (TL-FEAT-006): clear any remaining links to them, then
+    # the tags themselves — tags.user_id FK would otherwise block the delete.
+    own_tag_ids = db.session.query(Tag.id).filter_by(user_id=user_id)
+    db.session.query(TradeTag).filter(TradeTag.tag_id.in_(own_tag_ids)).delete(
+        synchronize_session=False
+    )
+    db.session.query(Tag).filter_by(user_id=user_id).delete()
     db.session.query(Trade).filter_by(user_id=user_id).delete()
     db.session.query(ImportBatch).filter_by(user_id=user_id).delete()
     db.session.query(UserPlaybook).filter_by(user_id=user_id).delete()
     db.session.query(ReportSnapshot).filter_by(user_id=user_id).delete()
+    # user_profiles rides the User.profile delete-orphan cascade (models.py) —
+    # bulk-deleting it here too would double-delete the same row.
+    db.session.query(SyncRun).filter_by(user_id=user_id).delete()
+    db.session.query(BrokerConnection).filter_by(user_id=user_id).delete()
+    db.session.query(WatchlistItem).filter_by(user_id=user_id).delete()
+    snapshot_ids = db.session.query(PortfolioSnapshot.id).filter_by(user_id=user_id)
+    db.session.query(PositionSnapshot).filter(
+        PositionSnapshot.snapshot_id.in_(snapshot_ids)
+    ).delete(synchronize_session=False)
+    db.session.query(PortfolioSnapshot).filter_by(user_id=user_id).delete(
+        synchronize_session=False
+    )
+    db.session.query(BrokerSyncDevice).filter_by(user_id=user_id).delete()
     db.session.query(AuthCode).filter_by(user_id=user_id).delete()
     db.session.query(UserSession).filter_by(user_id=user_id).delete()
     db.session.query(LoginAttempt).filter_by(email=user.email).delete()

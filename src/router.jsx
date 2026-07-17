@@ -5,6 +5,8 @@ import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx'
+import OnboardingPage from './pages/OnboardingPage.jsx'
+import HomePage from './pages/HomePage.jsx'
 import LibraryPage from './pages/LibraryPage.jsx'
 import JournalPage from './pages/JournalPage.jsx'
 import ReportsPage from './pages/ReportsPage.jsx'
@@ -21,6 +23,9 @@ export const router = createBrowserRouter([
   // OTP step: needs a session but must stay reachable while unverified, so it
   // lives outside ProtectedRoute and does its own auth checks.
   { path: '/verify', element: <VerifyEmailPage /> },
+  // Onboarding (TL-FEAT-008): needs a verified session but must stay
+  // reachable while incomplete — same pattern as /verify, own checks.
+  { path: '/onboarding', element: <OnboardingPage /> },
 
   // Protected app shell
   {
@@ -30,7 +35,10 @@ export const router = createBrowserRouter([
         path: '/',
         element: <AppLayout />,
         children: [
-          { index: true, element: <Navigate to="/library" replace /> },
+          // Home is the default landing page (TL-FEAT-009), including after
+          // login and onboarding completion.
+          { index: true, element: <Navigate to="/home" replace /> },
+          { path: 'home', element: <HomePage /> },
           { path: 'library', element: <LibraryPage /> },
           { path: 'journal', element: <JournalPage /> },
           { path: 'reports', element: <ReportsPage /> },

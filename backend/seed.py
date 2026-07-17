@@ -20,7 +20,7 @@ from werkzeug.security import generate_password_hash
 import config
 from app import app
 from extensions import db
-from models import Playbook, Tag, Trade, User, UserPlaybook, utcnow
+from models import Playbook, Tag, Trade, User, UserPlaybook, UserProfile, utcnow
 
 MOCK_DIR = Path(__file__).resolve().parent.parent / "src" / "mock"
 
@@ -51,7 +51,17 @@ def ensure_user(email, password, display_name, role):
     email = email.strip().lower()
     existing = db.session.query(User).filter_by(email=email).first()
     if existing:
-        print(f"= {email} already exists (role={existing.role}), skipped")
+        # Seed accounts must never sit unverified (D-014): rows created before
+        # the 1.5 migration have email_verified_at NULL and get stuck at
+        # /verify. Backfill ONLY that field, only for this seed email —
+        # everything else (password, display_name, ...) may have been changed
+        # by the user and is left untouched.
+        if existing.email_verified_at is None:
+            existing.email_verified_at = utcnow()
+            db.session.commit()
+            print(f"= {email} already exists (role={existing.role}), backfilled email_verified_at")
+        else:
+            print(f"= {email} already exists (role={existing.role}), skipped")
         return existing
     user = User(
         email=email,
@@ -65,6 +75,22 @@ def ensure_user(email, password, display_name, role):
     db.session.commit()
     print(f"+ created {email} (role={role})")
     return user
+
+
+def ensure_onboarded(user):
+    """Seed accounts never see the onboarding flow (TL-FEAT-008): make sure a
+    profile row exists and is marked complete. Idempotent; only the two
+    seed-identified accounts ever reach this."""
+    profile = db.session.get(UserProfile, user.id)
+    if profile is None:
+        profile = UserProfile(user_id=user.id)
+        db.session.add(profile)
+    if profile.onboarding_completed_at is None:
+        profile.onboarding_completed_at = utcnow()
+        db.session.commit()
+        print(f"+ {user.email}: onboarding marked complete")
+    else:
+        print(f"= {user.email}: onboarding already complete")
 
 
 def seed_playbooks():
@@ -157,8 +183,12 @@ def seed_demo_data(demo_user):
 if __name__ == "__main__":
     with app.app_context():
         demo = ensure_user(DEMO_EMAIL, DEMO_PASSWORD, "Demo Investor", "user")
+        ensure_onboarded(demo)
         if config.ADMIN_EMAIL and config.ADMIN_PASSWORD:
-            ensure_user(config.ADMIN_EMAIL, config.ADMIN_PASSWORD, "Platform Admin", "admin")
+            admin = ensure_user(
+                config.ADMIN_EMAIL, config.ADMIN_PASSWORD, "Platform Admin", "admin"
+            )
+            ensure_onboarded(admin)
         else:
             print("! ADMIN_EMAIL / ADMIN_PASSWORD not set in .env — admin account skipped")
         seed_playbooks()

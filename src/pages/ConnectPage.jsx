@@ -12,7 +12,13 @@ import {
 import * as dataApi from '../services/data.js'
 import { parseFlexReport } from '../services/flex.js'
 import flexSampleXml from '../mock/flexSample.xml?raw'
+import BrokerCenter from '../components/connect/BrokerCenter.jsx'
+import WatchlistCard from '../components/quotes/WatchlistCard.jsx'
+import SnapshotCard from '../components/portfolio/SnapshotCard.jsx'
+import { accountTagLabel } from '../utils/accountTags.js'
 import '../css/connect.css'
+import '../css/quotes.css'
+import '../css/portfolio.css'
 
 // Account tags worth surfacing as headline cards (rest still available raw).
 const HIGHLIGHT_TAGS = [
@@ -35,6 +41,27 @@ export default function ConnectPage() {
   const [backendDown, setBackendDown] = useState(false)
   const [importMsg, setImportMsg] = useState(null)
   const [importing, setImporting] = useState(false)
+  // Broker Connection Center state (TL-DATA-004). An active Flex connection
+  // makes Flex the ONLY ingestion path (D-019): the Gateway executions
+  // section degrades to a same-day read-only preview (no import button).
+  const [connections, setConnections] = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    dataApi
+      .fetchConnections()
+      .then((res) => {
+        if (!cancelled) setConnections(res.connections)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const flexConnected = connections.some(
+    (c) => c.provider === 'ibkr-flex' && c.status !== 'disconnected',
+  )
 
   async function refresh() {
     setLoading(true)
@@ -66,9 +93,13 @@ export default function ConnectPage() {
     }
   }
 
-  // Probe once on mount so the page reflects current state.
+  // Probe once on mount so the page reflects current state — but only on a
+  // local host: the cloud deployment can never reach a local IB Gateway
+  // (TL-DEPLOY-001 / D-019), so it shows the notice instead of probing.
   useEffect(() => {
-    refresh()
+    if (['127.0.0.1', 'localhost'].includes(window.location.hostname)) {
+      refresh()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -87,6 +118,13 @@ export default function ConnectPage() {
 
   const accountCards = buildAccountCards(account)
 
+  // TL-DEPLOY-001 (D-019 prep): IB Gateway is a LOCAL companion process; the
+  // cloud deployment can never reach it. On any non-local host the live
+  // section degrades to an explanatory notice instead of a doomed connect.
+  const isLocalHost = ['127.0.0.1', 'localhost'].includes(
+    window.location.hostname,
+  )
+
   return (
     <section className="page">
       <div className="cn-header">
@@ -94,16 +132,33 @@ export default function ConnectPage() {
           <h1 className="page-title">{t('connect.title')}</h1>
           <p className="page-subtitle">{t('connect.subtitle')}</p>
         </div>
-        <button type="button" className="cn-refresh" onClick={refresh} disabled={loading}>
+        <button
+          type="button"
+          className="cn-refresh"
+          onClick={refresh}
+          disabled={loading || !isLocalHost}
+        >
           {loading ? t('connect.loading') : t('connect.refresh')}
         </button>
       </div>
 
-      {backendDown && (
+      {!isLocalHost && (
+        <div className="cn-banner cn-banner-info">
+          {t('connect.cloudNotice')}
+        </div>
+      )}
+
+      {backendDown && isLocalHost && (
         <div className="cn-banner cn-banner-error">
           {t('connect.backendDown', { url: IBKR_BASE })}
         </div>
       )}
+
+      <BrokerCenter connections={connections} onChange={setConnections} />
+
+      <WatchlistCard />
+
+      <SnapshotCard />
 
       {status && (
         <div className={`cn-status ${status.connected ? 'cn-ok' : 'cn-off'}`}>
@@ -129,7 +184,11 @@ export default function ConnectPage() {
               <div className="cn-cards">
                 {accountCards.map((c) => (
                   <div key={c.tag} className="cn-card">
-                    <span className="cn-card-label">{c.tag}</span>
+                    {/* Translated product names, not raw IBKR tags
+                        (TL-DATA-006 cleanup; mapping in utils/accountTags) */}
+                    <span className="cn-card-label">
+                      {accountTagLabel(c.tag, t)}
+                    </span>
                     <span className="cn-card-value">{c.display}</span>
                   </div>
                 ))}
@@ -172,7 +231,7 @@ export default function ConnectPage() {
               <h2 className="cn-section-title">
                 {t('connect.previewTitle', { n: trades.length })}
               </h2>
-              {trades.length > 0 && (
+              {trades.length > 0 && !flexConnected && (
                 <button
                   type="button"
                   className="cn-import"
@@ -183,6 +242,11 @@ export default function ConnectPage() {
                 </button>
               )}
             </div>
+            {flexConnected && (
+              <div className="cn-banner cn-banner-info">
+                {t('connect.gatewayPreviewNote')}
+              </div>
+            )}
             {importMsg && <div className="cn-banner cn-banner-ok">{importMsg}</div>}
             {trades.length === 0 ? (
               <div className="cn-empty">{t('connect.noExecutions')}</div>

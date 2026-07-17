@@ -1,0 +1,75 @@
+/* Portfolio snapshot (TL-DATA-006) — shared by /connect and Home. */
+.ps-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.ps-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.ps-stale {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.12);
+  border-radius: 999px;
+  padding: 1px var(--space-2);
+}
+
+.ps-times {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+.ps-mixed {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.ps-empty {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin: var(--space-3) 0;
+}
+.ps-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.ps-summary {
+  margin-bottom: var(--space-4);
+}
+.ps-table {
+  margin-bottom: var(--space-3);
+}
+
+.ps-row-excluded {
+  opacity: 0.5;
+}
+.ps-excluded-badge {
+  margin-left: var(--space-2);
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0 6px;
+  vertical-align: middle;
+}
+
+.ps-total {
+  font-size: 0.95rem;
+}
+.ps-total-note {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}

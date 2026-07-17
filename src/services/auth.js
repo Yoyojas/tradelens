@@ -3,10 +3,16 @@
 // on the same host (127.0.0.1) — the cookie is host-scoped, and the Google
 // OAuth redirect URI is registered on 127.0.0.1.
 
+// Base URL resolution (TL-DEPLOY-001): explicit env override first; on a
+// local host default to the local backend on :5001 (Vite dev flow); anywhere
+// else — the single-container cloud deployment — use the SAME ORIGIN ('').
+const isLocalHost = ['127.0.0.1', 'localhost'].includes(
+  window.location.hostname,
+)
 export const API_BASE =
   import.meta.env.VITE_AUTH_API ||
   import.meta.env.VITE_IBKR_API ||
-  'http://127.0.0.1:5001'
+  (isLocalHost ? 'http://127.0.0.1:5001' : '')
 
 // Where the "Continue with Google" link points (top-level navigation, not fetch,
 // so the OAuth redirect chain and cookies work).

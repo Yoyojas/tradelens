@@ -6,9 +6,10 @@ import Modal from '../components/Modal.jsx'
 import TradeForm from '../components/journal/TradeForm.jsx'
 import TradeFilters from '../components/journal/TradeFilters.jsx'
 import TradeList from '../components/journal/TradeList.jsx'
+import TradeEditModal from '../components/journal/TradeEditModal.jsx'
 import '../css/journal.css'
 
-const EMPTY_FILTERS = { from: '', to: '', ticker: '', playbookId: '' }
+const EMPTY_FILTERS = { from: '', to: '', ticker: '', playbookId: '', tag: '' }
 
 export default function JournalPage() {
   const { trades, tradesTotal, loadMoreTrades, playbooks, deleteTrade } =
@@ -17,6 +18,9 @@ export default function JournalPage() {
 
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [toDelete, setToDelete] = useState(null)
+  // {trade, focusExit}: focusExit=true is the "close position" shortcut —
+  // same edit form, cursor on the exit-price field.
+  const [editing, setEditing] = useState(null)
   const [loadingMore, setLoadingMore] = useState(false)
 
   async function handleLoadMore() {
@@ -42,6 +46,12 @@ export default function JournalPage() {
     return playbooks.filter((p) => ids.has(p.id))
   }, [trades, playbooks])
 
+  // Tag labels actually used in the loaded window (same pattern as playbooks).
+  const tagOptions = useMemo(() => {
+    const labels = new Set(trades.flatMap((t) => t.tags || []))
+    return [...labels].sort((a, b) => a.localeCompare(b))
+  }, [trades])
+
   const visible = useMemo(() => {
     return trades
       .filter((t) => {
@@ -53,6 +63,13 @@ export default function JournalPage() {
           filters.playbookId &&
           filters.playbookId !== '__none__' &&
           t.playbookId !== filters.playbookId
+        )
+          return false
+        if (filters.tag === '__none__' && (t.tags || []).length) return false
+        if (
+          filters.tag &&
+          filters.tag !== '__none__' &&
+          !(t.tags || []).includes(filters.tag)
         )
           return false
         return true
@@ -86,12 +103,14 @@ export default function JournalPage() {
           filters={filters}
           onChange={handleFilterChange}
           playbookOptions={playbookOptions}
+          tagOptions={tagOptions}
           resultCount={visible.length}
           onReset={() => setFilters(EMPTY_FILTERS)}
         />
         <TradeList
           trades={visible}
           playbookNameById={playbookNameById}
+          onEdit={(trade, focusExit) => setEditing({ trade, focusExit })}
           onDelete={setToDelete}
         />
         {trades.length < tradesTotal && (
@@ -113,6 +132,14 @@ export default function JournalPage() {
           </div>
         )}
       </div>
+
+      {editing && (
+        <TradeEditModal
+          trade={editing.trade}
+          focusExit={editing.focusExit}
+          onClose={() => setEditing(null)}
+        />
+      )}
 
       {toDelete && (
         <Modal onClose={() => setToDelete(null)} ariaLabel={t('journal.deleteTitle')}>

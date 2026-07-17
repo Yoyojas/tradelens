@@ -30,8 +30,8 @@ the service contains no order / cancel / transfer code.
 One-time database setup (macOS/Homebrew shown):
 
 ```bash
-brew install postgresql@16
-brew services start postgresql@16
+brew install postgresql@17
+brew services start postgresql@17
 createdb tradelens
 ```
 
@@ -135,7 +135,24 @@ All via env / `backend/.env` (see `.env.example`): `DATABASE_URL`, `SECRET_KEY`,
 - `backend/.env` and any account/export dumps are git-ignored. **Never commit
   real account data.**
 - The front end keeps account/positions in memory only; only trades you choose to
-  import are persisted (in the browser's localStorage), never balances.
+  import are persisted (in Postgres, scoped to your account), never balances.
+
+## 5.5 Cloud snapshot push (local agent)
+
+The cloud deployment can never reach your local IB Gateway. To see your
+broker positions in the cloud app, run the push agent on this machine while
+the gateway and this backend are up:
+
+```bash
+export TL_DEVICE_TOKEN=...   # Settings -> Signed-in devices -> Sync devices (shown once)
+python push_snapshot.py --url https://mytradelens.app                 # push once
+python push_snapshot.py --url https://mytradelens.app --interval 300  # keep pushing
+```
+
+The token is a hashed, revocable credential that can only push snapshots —
+it is not a login and carries no IBKR credentials. The cloud UI always shows
+snapshot timestamps and marks stale data; it never pretends a snapshot is
+live (TL-DATA-006).
 
 ## 6. Notes / gotchas
 

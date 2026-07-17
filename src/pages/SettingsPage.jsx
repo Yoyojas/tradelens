@@ -6,6 +6,9 @@ import { DATE_LOCALES } from '../i18n/languages.js'
 import * as authApi from '../services/auth.js'
 import PasswordInput from '../components/PasswordInput.jsx'
 import Modal from '../components/Modal.jsx'
+import TagManager from '../components/settings/TagManager.jsx'
+import TradingPreferences from '../components/settings/TradingPreferences.jsx'
+import SyncDevices from '../components/settings/SyncDevices.jsx'
 import '../css/settings.css'
 
 // Account settings: change password, device sessions. The danger zone lands
@@ -25,8 +28,23 @@ export default function SettingsPage() {
       </div>
 
       <div className="set-card">
+        <h2 className="set-heading">{t('settings.prefsTitle')}</h2>
+        <TradingPreferences />
+      </div>
+
+      <div className="set-card">
+        <h2 className="set-heading">{t('settings.tagsTitle')}</h2>
+        <TagManager />
+      </div>
+
+      <div className="set-card">
         <h2 className="set-heading">{t('settings.devicesTitle')}</h2>
         <DevicesSection />
+      </div>
+
+      <div className="set-card">
+        <h2 className="set-heading">{t('settings.devTitle')}</h2>
+        <SyncDevices />
       </div>
 
       <div className="set-card set-card-danger">

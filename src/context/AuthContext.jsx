@@ -79,6 +79,18 @@ export function AuthProvider({ children }) {
     authApi.logout().catch(() => {})
   }
 
+  // Re-pull /me after server-side profile changes (e.g. onboarding completes)
+  // so the route gate sees the new state without a full reload.
+  async function refreshUser() {
+    try {
+      const user = await authApi.me()
+      setCurrentUser(user)
+      return user
+    } catch {
+      return null
+    }
+  }
+
   // ── Email verification (backend one-time codes) ──────────────
   // `lang` comes from the caller (which knows the UI language) and picks the
   // language of the code email.
@@ -134,6 +146,7 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      refreshUser,
       requestVerifyCode,
       confirmVerifyCode,
       changePassword,

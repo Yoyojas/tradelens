@@ -39,9 +39,14 @@ account additionally sees the **Admin** tab.
 - **Reports** (`/reports`) — win rate, avg win/loss ratio, holding-period
   distribution, and position concentration; overall or per playbook.
 - **Admin** (`/admin`, admin only) — create / edit / delete library playbooks.
+- **Settings** (`/settings`) — change password, manage signed-in devices, and
+  delete the account (danger zone).
 - **Live** (`/connect`) — connect to a local **IB Gateway** (read-only) to view
   account summary / positions and import executions as trades. Requires the Flask
-  backend in [`backend/`](backend/README.md) running alongside IB Gateway.
+  backend in [`backend/`](backend/README.md) running alongside IB Gateway. The
+  page also hosts the **Flex statement upload**: full trade history exported
+  from IBKR Account Management, parsed in the browser (`services/flex.js`),
+  FIFO-paired server-side, previewed, then imported with duplicates skipped.
 
 ## Architecture
 
@@ -52,11 +57,12 @@ src/
 ├─ context/              AuthContext, DataContext (useState + useContext)
 ├─ services/auth.js      auth API client (shared fetch wrapper)
 ├─ services/data.js      data API client (trades / playbooks / tags)
+├─ services/flex.js      IBKR Flex statement (XML) parsing in the browser
 ├─ services/api.js       legacy localStorage read-out (one-time migration only)
 ├─ mock/                 playbooks / trades / tags seed JSON (loaded by backend/seed.py)
 ├─ utils/                metrics.js, validation.js, format.js (pure functions)
 ├─ pages/                one component per view
-├─ components/           library/ journal/ reports/ admin/ + shared Modal
+├─ components/           library/ journal/ reports/ admin/ + shared Modal, PasswordInput
 └─ css/                  one external stylesheet per view (course requirement)
 ```
 
@@ -79,5 +85,5 @@ All dashboard numbers are computed in the front end from the account's trades
 
 ## Out of scope (so far)
 
-CSV/Flex file import, live market data, payments. Trade records carry an
-optional `tags` field reserved for a future UI.
+Live market data, payments. Trade records carry an optional `tags` field
+reserved for a future UI.

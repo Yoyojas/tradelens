@@ -35,6 +35,14 @@ class User(UserMixin, db.Model):
         # transient attribute by auth._start_session just before login_user.
         return f"{self.id}:{getattr(self, '_login_token', '')}"
 
+    # One row per user once they touch onboarding (TL-FEAT-008); legacy
+    # accounts got a row backfilled by migration 1bdf8c94ad63. delete-orphan:
+    # deleting the user deletes the profile through THIS relationship — the
+    # account-deletion cascade must not also bulk-delete it (double delete).
+    profile = db.relationship(
+        "UserProfile", uselist=False, lazy="joined", cascade="all, delete-orphan"
+    )
+
     def to_json(self):
         """Shape consumed by the React AuthContext (camelCase)."""
         return {
@@ -48,6 +56,12 @@ class User(UserMixin, db.Model):
             "emailVerifiedAt": self.email_verified_at.isoformat()
             if self.email_verified_at
             else None,
+            # Route guard inputs (TL-FEAT-008): incomplete -> /onboarding;
+            # legacy accounts see the skippable variant.
+            "onboardingCompleted": bool(
+                self.profile and self.profile.onboarding_completed_at
+            ),
+            "onboardingLegacy": bool(self.profile and self.profile.is_legacy),
             "createdAt": self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -160,6 +174,10 @@ class ImportBatch(db.Model):
 
 
 class Trade(db.Model):
+    """P&L is intentionally NOT stored: it is always derived from
+    side/quantity/entry_price/exit_price/fees (src/utils/metrics.js
+    realizedPnl), so an edit can never leave a stale stored figure."""
+
     __tablename__ = "trades"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -220,14 +238,46 @@ class Trade(db.Model):
 
 
 class Tag(db.Model):
+    """Trade tags. user_id NULL = shared template (admin-curated, usable by
+    every account, editable only via admin endpoints); user_id set = private
+    to that user. Label uniqueness is split into two partial indexes (shared
+    domain / per-user domain) — migration 039c5b72c6da. App code additionally
+    dedupes case-insensitively within a user's visible set."""
+
     __tablename__ = "tags"
 
     id = db.Column(db.Integer, primary_key=True)
-    label = db.Column(db.String(40), unique=True, nullable=False)
+    label = db.Column(db.String(40), nullable=False)
     color = db.Column(db.String(9), nullable=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=True, index=True
+    )
+
+    __table_args__ = (
+        db.Index(
+            "uq_tags_shared_label",
+            "label",
+            unique=True,
+            postgresql_where=db.text("user_id IS NULL"),
+        ),
+        db.Index(
+            "uq_tags_user_label",
+            "user_id",
+            "label",
+            unique=True,
+            postgresql_where=db.text("user_id IS NOT NULL"),
+        ),
+    )
 
     def to_json(self):
-        return {"id": self.id, "label": self.label, "color": self.color}
+        return {
+            "id": self.id,
+            "label": self.label,
+            "color": self.color,
+            # Shared tags are usable but read-only for regular users; the
+            # settings tag manager keys its edit affordances off this flag.
+            "shared": self.user_id is None,
+        }
 
 
 class TradeTag(db.Model):
@@ -288,6 +338,258 @@ class LoginAttempt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), nullable=False, index=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+# Provider/adapter contract (TL-DATA-004): how a broker can be linked.
+# flex_query is the only implemented type; oauth / api_token are contract
+# placeholders for future adapters; file_import marks brokers whose data can
+# only arrive via manual statement upload; unsupported = listed, no path yet.
+CONNECTION_TYPES = ("flex_query", "oauth", "api_token", "file_import", "unsupported")
+
+
+class BrokerConnection(db.Model):
+    """A saved broker link (TL-DATA-004). One per (user, provider). The Flex
+    token is stored ONLY encrypted (flex_service.encrypt_token; Fernet key
+    from the FLEX_TOKEN_KEY secret) — plaintext exists transiently in request
+    memory and sync jobs, never in logs, errors, or API responses. token_mask
+    keeps the last 4 characters for display."""
+
+    __tablename__ = "broker_connections"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    provider = db.Column(db.String(30), nullable=False, default="ibkr-flex")
+    connection_type = db.Column(db.String(20), nullable=False, default="flex_query")
+    encrypted_token = db.Column(db.Text, nullable=False)
+    token_mask = db.Column(db.String(8), nullable=False, default="")
+    query_id = db.Column(db.String(40), nullable=False)
+    date_format = db.Column(db.String(20), nullable=False, default="yyyyMMdd")
+    # active | expired | error | disconnected
+    status = db.Column(db.String(16), nullable=False, default="active")
+    last_sync_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    next_sync_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "provider", name="uq_broker_conn_user_provider"),
+    )
+
+    def to_json(self):
+        return {
+            "id": self.id,
+            "provider": self.provider,
+            "connectionType": self.connection_type,
+            # Masked summary only — the token itself never travels back.
+            "tokenMask": f"****{self.token_mask}" if self.token_mask else "****",
+            "queryId": self.query_id,
+            "dateFormat": self.date_format,
+            "status": self.status,
+            "lastSyncAt": self.last_sync_at.isoformat() if self.last_sync_at else None,
+            "nextSyncAt": self.next_sync_at.isoformat() if self.next_sync_at else None,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class SyncRun(db.Model):
+    """One sync attempt (TL-DATA-004): initial / manual / scheduled. Pruned
+    opportunistically after 90 days (flex_service.prune_sync_runs)."""
+
+    __tablename__ = "sync_runs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    connection_id = db.Column(
+        db.Integer, db.ForeignKey("broker_connections.id"), nullable=False, index=True
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    kind = db.Column(db.String(16), nullable=False, default="manual")
+    status = db.Column(db.String(12), nullable=False, default="running")
+    started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    added = db.Column(db.Integer, nullable=False, default=0)
+    skipped = db.Column(db.Integer, nullable=False, default=0)
+    failed = db.Column(db.Integer, nullable=False, default=0)
+    error_code = db.Column(db.String(40), nullable=True)
+
+    def to_json(self):
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "status": self.status,
+            "startedAt": self.started_at.isoformat() if self.started_at else None,
+            "finishedAt": self.finished_at.isoformat() if self.finished_at else None,
+            "added": self.added,
+            "skipped": self.skipped,
+            "failed": self.failed,
+            "errorCode": self.error_code,
+        }
+
+
+class BrokerSyncDevice(db.Model):
+    """A local push agent's credential (TL-DATA-006). The plaintext token is
+    shown ONCE at creation and only its SHA-256 hash is stored; token_hint
+    keeps the last 4 characters for the settings list. Parallel to — never
+    mixed with — the session system: it can do exactly one thing, push
+    snapshots."""
+
+    __tablename__ = "broker_sync_devices"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    name = db.Column(db.String(60), nullable=False)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    token_hint = db.Column(db.String(8), nullable=False, default="")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    last_used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    def to_json(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "tokenHint": f"****{self.token_hint}" if self.token_hint else "****",
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+            "lastUsedAt": self.last_used_at.isoformat() if self.last_used_at else None,
+            "expiresAt": self.expires_at.isoformat() if self.expires_at else None,
+            "revoked": self.revoked_at is not None,
+        }
+
+
+class PortfolioSnapshot(db.Model):
+    """One pushed portfolio state (TL-DATA-006). captured_at = when the local
+    agent read the Gateway; received_at = when the cloud stored it. The UI
+    always shows BOTH and never presents a snapshot as live data. Retention:
+    last snapshot per day, 30 days (pruned on push)."""
+
+    __tablename__ = "portfolio_snapshots"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    device_id = db.Column(
+        db.Integer, db.ForeignKey("broker_sync_devices.id"), nullable=False
+    )
+    nonce = db.Column(db.String(64), nullable=False)
+    captured_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    received_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    base_currency = db.Column(db.String(10), nullable=False, default="USD")
+    # [{tag, value, currency}] — raw IBKR account tags; the client maps known
+    # tags to translated product names (connect.tag_* i18n keys).
+    summary = db.Column(db.JSON, nullable=True)
+
+    positions = db.relationship(
+        "PositionSnapshot", lazy="selectin", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        # Anti-replay backstop: a nonce can be accepted once per device, ever.
+        db.UniqueConstraint("device_id", "nonce", name="uq_snapshot_device_nonce"),
+    )
+
+    def to_json(self):
+        return {
+            "id": self.id,
+            "capturedAt": self.captured_at.isoformat() if self.captured_at else None,
+            "receivedAt": self.received_at.isoformat() if self.received_at else None,
+            "baseCurrency": self.base_currency,
+            "summary": self.summary or [],
+            "positions": [p.to_json() for p in self.positions],
+        }
+
+
+class PositionSnapshot(db.Model):
+    __tablename__ = "position_snapshots"
+
+    id = db.Column(db.Integer, primary_key=True)
+    snapshot_id = db.Column(
+        db.Integer,
+        db.ForeignKey("portfolio_snapshots.id"),
+        nullable=False,
+        index=True,
+    )
+    symbol = db.Column(db.String(20), nullable=False)
+    quantity = db.Column(db.Numeric(18, 4), nullable=False)
+    avg_cost = db.Column(db.Numeric(18, 4), nullable=True)
+    currency = db.Column(db.String(10), nullable=False, default="USD")
+    sec_type = db.Column(db.String(10), nullable=False, default="STK")
+
+    def to_json(self):
+        return {
+            "symbol": self.symbol,
+            "quantity": float(self.quantity),
+            "avgCost": float(self.avg_cost) if self.avg_cost is not None else None,
+            "currency": self.currency,
+            "secType": self.sec_type,
+        }
+
+
+class WatchlistItem(db.Model):
+    """Per-user stock watchlist (TL-DATA-005). Cap (30, the Alpaca Basic WS
+    ceiling kept for consistency even on REST) is enforced at the API layer
+    with the stable error code watchlist_full."""
+
+    __tablename__ = "watchlist_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    symbol = db.Column(db.String(20), nullable=False)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "symbol", name="uq_watchlist_user_symbol"),
+    )
+
+    def to_json(self):
+        return {"id": self.id, "symbol": self.symbol, "sortOrder": self.sort_order}
+
+
+class UserProfile(db.Model):
+    """Onboarding answers + completion state (TL-FEAT-008). One row per user;
+    deliberately free of sensitive fields (no income / net worth / risk
+    tolerance). List answers (account_types, assets, goals) store canonical
+    English slugs — the UI translates for display."""
+
+    __tablename__ = "user_profiles"
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
+    experience = db.Column(db.String(20), nullable=True)
+    account_types = db.Column(db.JSON, nullable=True)
+    primary_broker = db.Column(db.String(40), nullable=True)
+    assets = db.Column(db.JSON, nullable=True)
+    goals = db.Column(db.JSON, nullable=True)
+    referral_source = db.Column(db.String(40), nullable=True)
+    onboarding_completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Resume pointer: the step the user should land on next (0-based).
+    current_step = db.Column(db.Integer, nullable=False, default=0)
+    # True for accounts that predate onboarding: they get a one-time,
+    # skippable intro (skip marks the flow complete).
+    is_legacy = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    def to_json(self):
+        return {
+            "experience": self.experience,
+            "accountTypes": self.account_types or [],
+            "primaryBroker": self.primary_broker,
+            "assets": self.assets or [],
+            "goals": self.goals or [],
+            "referralSource": self.referral_source,
+            "completedAt": self.onboarding_completed_at.isoformat()
+            if self.onboarding_completed_at
+            else None,
+            "currentStep": self.current_step,
+            "legacy": self.is_legacy,
+        }
 
 
 class AuthCode(db.Model):

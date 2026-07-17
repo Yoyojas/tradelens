@@ -16,10 +16,13 @@ Run:
     python seed.py               # demo + admin accounts
     python app.py
 """
+import os
 import secrets
+from urllib.parse import urlparse
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, redirect, request, send_from_directory
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config
 import models  # noqa: F401  (registers all tables on db.metadata)
@@ -34,11 +37,32 @@ app.config.update(
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     # Session cookie: httpOnly (JS can't read it) + Lax. The Vite app and this
     # backend are both on 127.0.0.1, so Lax cookies flow on fetch calls.
+    # Production (TL-DEPLOY-001) serves app + API from one origin and adds
+    # Secure (https-only) via COOKIE_SECURE.
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=config.COOKIE_SECURE,
     REMEMBER_COOKIE_HTTPONLY=True,
     REMEMBER_COOKIE_SAMESITE="Lax",
+    REMEMBER_COOKIE_SECURE=config.COOKIE_SECURE,
 )
+if config.TRUST_PROXY:
+    # Behind the Container Apps ingress: trust one hop of X-Forwarded-* so
+    # url_for/OAuth redirects and Secure cookies see the real https origin.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# www -> apex 301 (TL-DEPLOY-001). Canonical host derives from FRONTEND_URL,
+# so local dev (127.0.0.1) never triggers this.
+_CANONICAL_HOST = urlparse(config.FRONTEND_URL).hostname or ""
+
+
+@app.before_request
+def _redirect_www_to_apex():
+    host = (request.host or "").split(":")[0]
+    if _CANONICAL_HOST and host == f"www.{_CANONICAL_HOST}":
+        target = f"{config.FRONTEND_URL.rstrip('/')}{request.full_path}"
+        return redirect(target.rstrip("?"), code=301)
+    return None
 if config.SECRET_KEY:
     app.config["SECRET_KEY"] = config.SECRET_KEY
 else:
@@ -60,6 +84,30 @@ app.register_blueprint(api_bp)
 @app.get("/api/health")
 def health():
     return jsonify({"ok": True, "service": "tradelens-ibkr", "readOnly": True})
+
+
+# ── Static SPA hosting (TL-DEPLOY-001) ──────────────────────────
+# In the container the Vite build sits next to backend/ as ../dist and this
+# Flask app serves it (single-container deployment, same-origin cookies).
+# Registered only when a build exists, so `python app.py` local dev with the
+# Vite dev server is completely unaffected. API routes are registered above
+# and always win; unknown /api/* paths 404 as JSON instead of index.html.
+DIST_DIR = os.environ.get(
+    "STATIC_DIST", os.path.join(os.path.dirname(__file__), "..", "dist")
+)
+
+if os.path.isfile(os.path.join(DIST_DIR, "index.html")):
+
+    @app.get("/")
+    @app.get("/<path:spa_path>")
+    def spa(spa_path=""):
+        if spa_path.startswith("api/"):
+            return jsonify({"error": "not_found"}), 404
+        full = os.path.join(DIST_DIR, spa_path)
+        if spa_path and os.path.isfile(full):
+            return send_from_directory(DIST_DIR, spa_path)
+        # SPA fallback: any client-side route gets the app shell.
+        return send_from_directory(DIST_DIR, "index.html")
 
 
 @app.get("/api/ibkr/status")

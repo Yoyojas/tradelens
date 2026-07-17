@@ -46,6 +46,15 @@ export function formatNumber(value, digits = 0) {
   })
 }
 
+// Trade source -> i18n key (journal.*). Returns null for unknown sources so
+// callers can fall back to the raw string instead of rendering blank.
+export function sourceLabelKey(source) {
+  if (!source || source === 'manual') return 'journal.sourceManual'
+  if (source === 'broker:ibkr') return 'journal.sourceIbkr'
+  if (source === 'broker:ibkr-flex') return 'journal.sourceFlex'
+  return null
+}
+
 // "2026-02-01" -> "Feb 1, 2026". Accepts date-only or ISO strings.
 export function formatDate(value) {
   if (!value) return '—'

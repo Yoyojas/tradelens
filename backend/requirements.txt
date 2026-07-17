@@ -8,3 +8,5 @@ requests>=2.31
 psycopg2-binary>=2.9
 ib_insync>=0.9.86
 python-dotenv>=1.0
+gunicorn>=22.0
+cryptography>=42.0

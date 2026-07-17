@@ -1,10 +1,11 @@
 import { useLang } from '../../i18n/LanguageContext.jsx'
 
-// Trade-history filters: date range (by open date), ticker, and playbook.
+// Trade-history filters: date range (by open date), ticker, playbook, tag.
 export default function TradeFilters({
   filters,
   onChange,
   playbookOptions,
+  tagOptions,
   resultCount,
   onReset,
 }) {
@@ -49,6 +50,21 @@ export default function TradeFilters({
             </option>
           ))}
           <option value="__none__">{t('journal.noPlaybook')}</option>
+        </select>
+      </label>
+      <label className="tl-filter">
+        <span>{t('journal.tag')}</span>
+        <select
+          value={filters.tag}
+          onChange={(e) => onChange('tag', e.target.value)}
+        >
+          <option value="">{t('common.all')}</option>
+          {tagOptions.map((label) => (
+            <option key={label} value={label}>
+              {label}
+            </option>
+          ))}
+          <option value="__none__">{t('journal.noTag')}</option>
         </select>
       </label>
 

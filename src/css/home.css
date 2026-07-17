@@ -1,0 +1,182 @@
+/* Home dashboard (TL-FEAT-009). */
+.hm-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 var(--space-5);
+}
+.hm-chip {
+  font-size: 0.78rem;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 2px var(--space-3);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.hm-chip-active {
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.1);
+}
+.hm-chip-expired,
+.hm-chip-error {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.1);
+}
+.hm-chip-cta {
+  color: #fff;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.hm-chip-cta:hover {
+  background: var(--color-primary-hover);
+}
+.hm-sync-btn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px var(--space-3);
+  border: 1px solid var(--color-primary);
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.hm-sync-btn:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+.hm-sync-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.hm-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-4) var(--space-5);
+}
+.hm-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.hm-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: var(--space-3);
+}
+.hm-link {
+  font-size: 0.82rem;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.hm-link:hover {
+  text-decoration: underline;
+}
+.hm-empty {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+.hm-sub {
+  font-size: 0.78rem;
+  margin-bottom: var(--space-2);
+}
+
+.hm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.hm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.88rem;
+}
+.hm-row:last-child {
+  border-bottom: none;
+}
+.hm-sym {
+  font-weight: 600;
+  min-width: 56px;
+}
+.hm-muted {
+  color: var(--color-text-muted);
+}
+.hm-num {
+  margin-left: auto;
+  font-weight: 600;
+}
+.hm-warn {
+  color: var(--color-warning);
+  font-weight: 700;
+}
+.hm-check-done {
+  color: var(--color-success);
+  font-weight: 700;
+}
+.hm-check-todo {
+  color: var(--color-text-muted);
+}
+.hm-layer-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: var(--space-3) 0 var(--space-1);
+}
+
+/* Month P&L calendar */
+.hm-cal {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.hm-cal-head {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  padding-bottom: 2px;
+}
+.hm-cal-pad {
+  min-height: 30px;
+}
+.hm-cal-day {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+}
+.hm-cal-pos {
+  background: rgba(34, 197, 94, 0.25);
+  color: #bbf7d0;
+  font-weight: 600;
+}
+.hm-cal-neg {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fecaca;
+  font-weight: 600;
+}
+.hm-cal-flat {
+  background: rgba(148, 163, 184, 0.25);
+  color: var(--color-text);
+}

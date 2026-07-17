@@ -9,26 +9,46 @@ tag_exists).
 Report aggregation deliberately stays on the client this step — this API only
 replaces the data source.
 """
+import hashlib
 import math
+import re
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 
-from flask import Blueprint, jsonify, request
+import config
+from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
+import flex_service
 from extensions import db
 from pairing import pair_executions
+from trade_import import (
+    ImportConflict,
+    bulk_import,
+    existing_external_ids as _existing_external_ids_for,
+    trade_from_payload,
+)
+import quotes as quotes_service
 from models import (
     PLAYBOOK_LANGS,
+    BrokerConnection,
+    BrokerSyncDevice,
     ImportBatch,
     Playbook,
+    PortfolioSnapshot,
+    PositionSnapshot,
+    SyncRun,
     Tag,
     Trade,
     TradeTag,
     User,
     UserPlaybook,
+    UserProfile,
+    WatchlistItem,
+    utcnow,
 )
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -110,53 +130,53 @@ def _valid_playbook_id(pid):
     return str(pid) if exists else None
 
 
-def _tags_for_labels(labels):
-    """Resolve tag labels to Tag rows, creating unknown labels on the fly.
-    Duplicates are collapsed (a repeated label would double-insert the same
-    trade_tags primary key)."""
+def _normalize_label(raw):
+    """Tag label normalization (TL-FEAT-006): trim, collapse internal
+    whitespace, clip to the column length. Case-INSENSITIVE dedupe happens at
+    lookup time; the original casing is preserved for display."""
+    return re.sub(r"\s+", " ", str(raw)).strip()[:40]
+
+
+def _find_visible_tag(label, user_id):
+    """Case-insensitive label lookup within the user's visible set (shared +
+    own). Prefers the user's own tag when both domains hold the same label."""
+    return (
+        db.session.query(Tag)
+        .filter(
+            func.lower(Tag.label) == label.lower(),
+            or_(Tag.user_id.is_(None), Tag.user_id == user_id),
+        )
+        .order_by(Tag.user_id.is_(None))
+        .first()
+    )
+
+
+def _tags_for_labels(labels, user_id):
+    """Resolve tag labels to Tag rows visible to the user (shared + own).
+    Unknown labels are created as the USER'S OWN tags — never shared ones.
+    Duplicates collapse case-insensitively (a repeated label would
+    double-insert the same trade_tags primary key)."""
     if not isinstance(labels, list):
         return []
     tags, seen = [], set()
     for raw in labels:
-        label = _s(raw, 40).strip()
-        if not label or label in seen:
+        label = _normalize_label(raw)
+        if not label or label.lower() in seen:
             continue
-        seen.add(label)
-        tag = db.session.query(Tag).filter_by(label=label).first()
+        seen.add(label.lower())
+        tag = _find_visible_tag(label, user_id)
         if tag is None:
-            tag = Tag(label=label)
+            tag = Tag(label=label, user_id=user_id)
             db.session.add(tag)
             db.session.flush()
         tags.append(tag)
     return tags
 
 
-def _trade_from_payload(data, user_id):
-    """Build a Trade from the front-end camelCase shape. Returns (trade, error)."""
-    ticker = _s(data.get("ticker", ""), 20).strip().upper()
-    side = str(data.get("side", "long")).lower()
-    quantity = _parse_number(data.get("quantity"))
-    entry_price = _parse_number(data.get("entryPrice"))
-    open_date = _parse_date(data.get("openDate"))
-    if not ticker or side not in ("long", "short") or quantity is None or entry_price is None or open_date is None:
-        return None, "invalid_payload"
-    trade = Trade(
-        user_id=user_id,
-        playbook_id=_valid_playbook_id(data.get("playbookId")),
-        ticker=ticker,
-        side=side,
-        quantity=quantity,
-        entry_price=entry_price,
-        exit_price=_parse_number(data.get("exitPrice")),
-        open_date=open_date,
-        close_date=_parse_date(data.get("closeDate")),
-        fees=_parse_number(data.get("fees"), 0.0) or 0.0,
-        notes=str(data.get("notes") or ""),
-        source=_s(data.get("source") or "manual", 30),
-        external_id=(_s(data["externalId"], 80) if data.get("externalId") else None),
-    )
-    trade.tags = _tags_for_labels(data.get("tags"))
-    return trade, None
+# Payload -> Trade construction lives in trade_import.py (shared with the
+# scheduled Flex sync, which has no request context). Tag resolution inside
+# it calls back into _tags_for_labels below.
+_trade_from_payload = trade_from_payload
 
 
 # ── Trades ───────────────────────────────────────────────────────
@@ -178,6 +198,13 @@ def list_trades():
     playbook_id = request.args.get("playbookId", "").strip()
     if playbook_id:
         q = q.filter(Trade.playbook_id == playbook_id)
+    # Tag filter (TL-FEAT-006). Scoped to the user's own trades by the base
+    # query, so someone else's tagId simply matches nothing — no leak.
+    tag_id = request.args.get("tagId", "").strip()
+    if tag_id.isdigit():
+        q = q.join(TradeTag, TradeTag.trade_id == Trade.id).filter(
+            TradeTag.tag_id == int(tag_id)
+        )
     q = q.order_by(Trade.open_date.desc(), Trade.id.desc())
     # Pagination: default page 200; limit=0 asks for everything (Reports
     # aggregates client-side over the full set — dataset is small).
@@ -268,7 +295,24 @@ def update_trade(trade_id):
     if "playbookId" in data:
         trade.playbook_id = _valid_playbook_id(data["playbookId"])
     if "tags" in data:
-        trade.tags = _tags_for_labels(data["tags"])
+        trade.tags = _tags_for_labels(data["tags"], current_user.id)
+    # source / external_id are deliberately NOT patchable: they are the import
+    # dedupe identity (D-010) and the audit trail back to the broker record.
+    # Whole-trade validation after all patches apply — per-field checks can't
+    # see cross-field state (e.g. clearing exitPrice while closeDate stays):
+    # exit_price and close_date must be both empty (open) or both set (closed),
+    # close on/after open, quantity and prices strictly positive. Uncommitted
+    # mutations are discarded by the session teardown rollback.
+    if (trade.exit_price is None) != (trade.close_date is None):
+        return _err("invalid_payload")
+    if trade.close_date is not None and trade.close_date < trade.open_date:
+        return _err("invalid_payload")
+    if trade.quantity is None or trade.quantity <= 0:
+        return _err("invalid_payload")
+    if trade.entry_price is None or trade.entry_price <= 0:
+        return _err("invalid_payload")
+    if trade.exit_price is not None and trade.exit_price <= 0:
+        return _err("invalid_payload")
     db.session.commit()
     return jsonify(trade.to_json())
 
@@ -287,57 +331,18 @@ def delete_trade(trade_id):
 
 
 def _existing_external_ids(user_id):
-    return {
-        (source, external_id)
-        for source, external_id in db.session.query(
-            Trade.source, Trade.external_id
-        ).filter(Trade.user_id == user_id, Trade.external_id.isnot(None))
-    }
+    return _existing_external_ids_for(user_id)
 
 
 def _bulk_import(incoming, batch_source):
-    """Insert trade payloads for current_user with source+externalId dedupe.
-    Shared by /trades/import (live IBKR, local migration) and
-    /trades/import/flex. Returns a response tuple.
-
-    Two attempts: a concurrent import (double-submit) can commit between our
-    dedupe snapshot and our commit; the retry re-reads and skips those rows
-    instead of surfacing the unique-constraint violation as a 500."""
-    for attempt in (1, 2):
-        existing = _existing_external_ids(current_user.id)
-
-        batch = ImportBatch(user_id=current_user.id, source=batch_source)
-        db.session.add(batch)
-        db.session.flush()
-
-        added, skipped = 0, 0
-        for item in incoming:
-            if not isinstance(item, dict):
-                skipped += 1
-                continue
-            external_id = _s(item["externalId"], 80) if item.get("externalId") else None
-            source = _s(item.get("source") or "manual", 30)
-            if external_id and (source, external_id) in existing:
-                skipped += 1
-                continue
-            trade, error = _trade_from_payload(item, current_user.id)
-            if error:
-                skipped += 1
-                continue
-            trade.import_batch_id = batch.id
-            db.session.add(trade)
-            if external_id:
-                existing.add((source, external_id))  # also dedupes within the batch
-            added += 1
-
-        batch.added, batch.skipped = added, skipped
-        try:
-            db.session.commit()
-            return jsonify({"added": added, "skipped": skipped})
-        except IntegrityError:
-            db.session.rollback()
-            if attempt == 2:
-                return _err("conflict", 409)
+    """HTTP wrapper over trade_import.bulk_import (semantics unchanged:
+    per-user (source, externalId) dedupe, one retry against concurrent
+    duplicate inserts, then 409)."""
+    try:
+        result = bulk_import(current_user.id, incoming, batch_source)
+    except ImportConflict:
+        return _err("conflict", 409)
+    return jsonify(result)
 
 
 @bp.post("/trades/import")
@@ -574,13 +579,86 @@ def delete_playbook(playbook_id):
 
 
 # ── Tags ─────────────────────────────────────────────────────────
+# Visibility model (TL-FEAT-006, plan A): everyone sees shared tags
+# (user_id NULL) plus their own. Users create/rename/delete only their own;
+# shared tags are managed through the admin endpoints below.
 
 
 @bp.get("/tags")
 @require_user
 def list_tags():
-    tags = db.session.query(Tag).order_by(Tag.label).all()
+    tags = (
+        db.session.query(Tag)
+        .filter(or_(Tag.user_id.is_(None), Tag.user_id == current_user.id))
+        .order_by(Tag.label)
+        .all()
+    )
     return jsonify({"tags": [t.to_json() for t in tags]})
+
+
+@bp.post("/tags")
+@require_user
+def create_user_tag():
+    data = _json_body()
+    label = _normalize_label(data.get("label", ""))
+    if not label:
+        return _err("invalid_payload")
+    if _find_visible_tag(label, current_user.id):
+        return _err("tag_exists", 409)
+    tag = Tag(label=label, user_id=current_user.id)
+    db.session.add(tag)
+    try:
+        db.session.commit()
+    except IntegrityError:  # concurrent create of the same label
+        db.session.rollback()
+        return _err("tag_exists", 409)
+    return jsonify(tag.to_json()), 201
+
+
+def _own_tag_or_error(tag_id):
+    """Fetch a tag the current user may modify. Someone else's tag is
+    invisible (404); a shared tag is visible but read-only (403)."""
+    tag = db.session.get(Tag, tag_id)
+    if tag is None or (tag.user_id is not None and tag.user_id != current_user.id):
+        return None, _err("not_found", 404)
+    if tag.user_id is None:
+        return None, _err("forbidden", 403)
+    return tag, None
+
+
+@bp.patch("/tags/<int:tag_id>")
+@require_user
+def update_user_tag(tag_id):
+    tag, error = _own_tag_or_error(tag_id)
+    if error:
+        return error
+    data = _json_body()
+    if "label" in data:
+        label = _normalize_label(data["label"])
+        if not label:
+            return _err("invalid_payload")
+        existing = _find_visible_tag(label, current_user.id)
+        if existing and existing.id != tag.id:
+            return _err("tag_exists", 409)
+        tag.label = label
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return _err("tag_exists", 409)
+    return jsonify(tag.to_json())
+
+
+@bp.delete("/tags/<int:tag_id>")
+@require_user
+def delete_user_tag(tag_id):
+    tag, error = _own_tag_or_error(tag_id)
+    if error:
+        return error
+    db.session.query(TradeTag).filter_by(tag_id=tag.id).delete()
+    db.session.delete(tag)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @bp.post("/admin/tags")
@@ -608,6 +686,586 @@ def delete_tag(tag_id):
     db.session.delete(tag)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+# ── Broker connections (TL-DATA-004) ─────────────────────────────
+# IBKR Flex is the only implemented provider. The raw token appears ONLY in
+# request bodies and transient memory: responses carry a masked summary, the
+# database stores ciphertext, and nothing here logs it.
+
+FLEX_PROVIDER = "ibkr-flex"
+
+
+def _own_connection_or_404(connection_id):
+    conn = db.session.get(BrokerConnection, connection_id)
+    if conn is None or conn.user_id != current_user.id:
+        return None
+    return conn
+
+
+def _validate_flex_inputs(data):
+    token = str(data.get("token") or "").strip()
+    query_id = str(data.get("queryId") or "").strip()
+    date_format = _s(data.get("dateFormat") or "yyyyMMdd", 20).strip()
+    if not query_id.isdigit() or not (8 <= len(token) <= 512):
+        return None
+    return {"token": token, "queryId": query_id, "dateFormat": date_format}
+
+
+@bp.get("/broker/connections")
+@require_user
+def list_connections():
+    conns = (
+        db.session.query(BrokerConnection)
+        .filter_by(user_id=current_user.id)
+        .order_by(BrokerConnection.id)
+        .all()
+    )
+    return jsonify({"connections": [c.to_json() for c in conns]})
+
+
+@bp.post("/broker/connections/test")
+@require_user
+def test_connection():
+    """Server-side Test Connection: fetch the statement once and report field
+    completeness. Nothing is stored; the token never returns to the client."""
+    data = _json_body()
+    inputs = _validate_flex_inputs(data)
+    if not inputs:
+        return _err("invalid_payload")
+    try:
+        xml_text = flex_service.fetch_statement(inputs["token"], inputs["queryId"])
+        executions, non_stock, bad = flex_service.parse_flex_xml(xml_text)
+    except flex_service.FlexError as exc:
+        status = 503 if exc.code in ("flex_key_missing", "flex_unreachable") else 400
+        return _err(exc.code, status)
+    return jsonify(
+        {
+            "ok": True,
+            "tokenMask": f"****{flex_service.token_mask(inputs['token'])}",
+            "executions": len(executions),
+            "skippedNonStock": non_stock,
+            "skippedBad": bad,
+            # Zero usable rows with rows present = the query is missing
+            # required fields; guide the user back to the query template.
+            "fieldsOk": bad == 0,
+        }
+    )
+
+
+@bp.post("/broker/connections")
+@require_user
+def create_connection():
+    """Save (or replace) the IBKR Flex connection: encrypt + store."""
+    data = _json_body()
+    inputs = _validate_flex_inputs(data)
+    if not inputs:
+        return _err("invalid_payload")
+    try:
+        encrypted = flex_service.encrypt_token(inputs["token"])
+    except flex_service.FlexError as exc:
+        return _err(exc.code, 503)
+    conn = (
+        db.session.query(BrokerConnection)
+        .filter_by(user_id=current_user.id, provider=FLEX_PROVIDER)
+        .first()
+    )
+    if conn is None:
+        conn = BrokerConnection(user_id=current_user.id, provider=FLEX_PROVIDER)
+        db.session.add(conn)
+    conn.connection_type = "flex_query"
+    conn.encrypted_token = encrypted
+    conn.token_mask = flex_service.token_mask(inputs["token"])
+    conn.query_id = inputs["queryId"]
+    conn.date_format = inputs["dateFormat"]
+    conn.status = "active"
+    db.session.commit()
+    return jsonify(conn.to_json()), 201
+
+
+@bp.patch("/broker/connections/<int:connection_id>")
+@require_user
+def update_connection(connection_id):
+    """Update token (re-encrypt) and/or query settings."""
+    conn = _own_connection_or_404(connection_id)
+    if conn is None:
+        return _err("not_found", 404)
+    data = _json_body()
+    if data.get("token"):
+        token = str(data["token"]).strip()
+        if not (8 <= len(token) <= 512):
+            return _err("invalid_payload")
+        try:
+            conn.encrypted_token = flex_service.encrypt_token(token)
+        except flex_service.FlexError as exc:
+            return _err(exc.code, 503)
+        conn.token_mask = flex_service.token_mask(token)
+        conn.status = "active"
+    if data.get("queryId"):
+        query_id = str(data["queryId"]).strip()
+        if not query_id.isdigit():
+            return _err("invalid_payload")
+        conn.query_id = query_id
+    if data.get("dateFormat"):
+        conn.date_format = _s(data["dateFormat"], 20).strip()
+    db.session.commit()
+    return jsonify(conn.to_json())
+
+
+@bp.delete("/broker/connections/<int:connection_id>")
+@require_user
+def delete_connection(connection_id):
+    """Disconnect: remove the connection and its sync history. Imported
+    trades stay — they belong to the journal, not the connection."""
+    conn = _own_connection_or_404(connection_id)
+    if conn is None:
+        return _err("not_found", 404)
+    db.session.query(SyncRun).filter_by(connection_id=conn.id).delete()
+    db.session.delete(conn)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@bp.post("/broker/connections/<int:connection_id>/sync")
+@require_user
+def sync_connection(connection_id):
+    """First sync and the 'sync now' button (kind=initial|manual)."""
+    conn = _own_connection_or_404(connection_id)
+    if conn is None:
+        return _err("not_found", 404)
+    kind = "initial" if conn.last_sync_at is None else "manual"
+    run = flex_service.run_sync(conn, kind)
+    return jsonify({"run": run.to_json(), "connection": conn.to_json()})
+
+
+@bp.get("/broker/connections/<int:connection_id>/runs")
+@require_user
+def list_sync_runs(connection_id):
+    conn = _own_connection_or_404(connection_id)
+    if conn is None:
+        return _err("not_found", 404)
+    runs = (
+        db.session.query(SyncRun)
+        .filter_by(connection_id=conn.id)
+        .order_by(SyncRun.started_at.desc())
+        .limit(30)
+        .all()
+    )
+    return jsonify({"runs": [r.to_json() for r in runs]})
+
+
+# ── Quotes + watchlist (TL-DATA-005, D-020) ──────────────────────
+# The browser only ever talks to these proxies; Alpaca keys stay server-side.
+
+SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,19}$")
+WATCHLIST_CAP = 30
+
+
+@bp.get("/quotes")
+@require_user
+def get_quotes():
+    raw = request.args.get("symbols", "")
+    symbols = []
+    for part in raw.split(","):
+        symbol = part.strip().upper()
+        if symbol and SYMBOL_RE.fullmatch(symbol) and symbol not in symbols:
+            symbols.append(symbol)
+    symbols = symbols[: quotes_service.MAX_SYMBOLS]
+    if not symbols:
+        return jsonify({"quotes": {}, "marketOpen": None})
+    try:
+        result = quotes_service.provider.get_quotes(symbols)
+        market_open = quotes_service.provider.market_open()
+    except quotes_service.QuotesError as exc:
+        return _err(exc.code, 503)
+    return jsonify({"quotes": result, "marketOpen": market_open})
+
+
+@bp.get("/symbols/search")
+@require_user
+def search_symbols():
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"results": []})
+    try:
+        results = quotes_service.provider.search(query)
+    except quotes_service.QuotesError as exc:
+        return _err(exc.code, 503)
+    return jsonify({"results": results})
+
+
+@bp.get("/watchlist")
+@require_user
+def list_watchlist():
+    items = (
+        db.session.query(WatchlistItem)
+        .filter_by(user_id=current_user.id)
+        .order_by(WatchlistItem.sort_order, WatchlistItem.id)
+        .all()
+    )
+    return jsonify({"items": [i.to_json() for i in items]})
+
+
+@bp.post("/watchlist")
+@require_user
+def add_watchlist_item():
+    data = _json_body()
+    symbol = str(data.get("symbol") or "").strip().upper()
+    if not SYMBOL_RE.fullmatch(symbol or ""):
+        return _err("invalid_payload")
+    q = db.session.query(WatchlistItem).filter_by(user_id=current_user.id)
+    if q.count() >= WATCHLIST_CAP:
+        return _err("watchlist_full")
+    if q.filter_by(symbol=symbol).first():
+        return _err("watchlist_duplicate", 409)
+    max_order = (
+        db.session.query(db.func.coalesce(db.func.max(WatchlistItem.sort_order), 0))
+        .filter(WatchlistItem.user_id == current_user.id)
+        .scalar()
+    )
+    item = WatchlistItem(
+        user_id=current_user.id, symbol=symbol, sort_order=max_order + 1
+    )
+    db.session.add(item)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return _err("watchlist_duplicate", 409)
+    return jsonify(item.to_json()), 201
+
+
+@bp.delete("/watchlist/<int:item_id>")
+@require_user
+def delete_watchlist_item(item_id):
+    item = db.session.get(WatchlistItem, item_id)
+    if item is None or item.user_id != current_user.id:
+        return _err("not_found", 404)
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@bp.patch("/watchlist/reorder")
+@require_user
+def reorder_watchlist():
+    """{"ids": [...]} in the desired order; ids not owned are ignored."""
+    data = _json_body()
+    ids = data.get("ids")
+    if not isinstance(ids, list):
+        return _err("invalid_payload")
+    items = {
+        i.id: i
+        for i in db.session.query(WatchlistItem).filter_by(user_id=current_user.id)
+    }
+    order = 0
+    for raw in ids:
+        item = items.get(raw if isinstance(raw, int) else None)
+        if item:
+            order += 1
+            item.sort_order = order
+    db.session.commit()
+    return list_watchlist()
+
+
+# ── Portfolio snapshots + device tokens (TL-DATA-006) ────────────
+# The local agent (backend/push_snapshot.py) reads the user's own IB Gateway
+# and pushes a snapshot here over HTTPS. Cloud side holds ZERO IBKR
+# credentials — only a hashed, revocable device token that can do exactly one
+# thing. This is the app's only non-session endpoint besides the job trigger.
+
+
+def _hash_device_token(token):
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _parse_ts(value):
+    """ISO timestamp -> aware datetime (naive treated as UTC), else None."""
+    try:
+        ts = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+
+
+@bp.get("/broker/devices")
+@require_user
+def list_devices():
+    devices = (
+        db.session.query(BrokerSyncDevice)
+        .filter_by(user_id=current_user.id)
+        .order_by(BrokerSyncDevice.id)
+        .all()
+    )
+    return jsonify({"devices": [d.to_json() for d in devices]})
+
+
+@bp.post("/broker/devices")
+@require_user
+def create_device():
+    """Mint a device token. The PLAINTEXT appears exactly once — in this
+    response — and is never stored or shown again (hash + last-4 hint only)."""
+    data = _json_body()
+    name = _s(data.get("name") or "", 60).strip() or "Local agent"
+    expires_days = _parse_number(data.get("expiresDays"))
+    token = secrets.token_hex(32)
+    device = BrokerSyncDevice(
+        user_id=current_user.id,
+        name=name,
+        token_hash=_hash_device_token(token),
+        token_hint=token[-4:],
+        expires_at=(utcnow() + timedelta(days=expires_days))
+        if expires_days and expires_days > 0
+        else None,
+    )
+    db.session.add(device)
+    db.session.commit()
+    return jsonify({"device": device.to_json(), "token": token}), 201
+
+
+@bp.delete("/broker/devices/<int:device_id>")
+@require_user
+def revoke_device(device_id):
+    """Revoke, not delete: snapshots keep their FK and the audit trail stays."""
+    device = db.session.get(BrokerSyncDevice, device_id)
+    if device is None or device.user_id != current_user.id:
+        return _err("not_found", 404)
+    if device.revoked_at is None:
+        device.revoked_at = utcnow()
+        db.session.commit()
+    return jsonify(device.to_json())
+
+
+def _prune_snapshots(user_id, keep_id):
+    """Retention (TL-DATA-006): last snapshot per day, 30 days back."""
+    cutoff = utcnow() - timedelta(days=30)
+    keep = db.session.get(PortfolioSnapshot, keep_id)
+    doomed = (
+        db.session.query(PortfolioSnapshot)
+        .filter(PortfolioSnapshot.user_id == user_id, PortfolioSnapshot.id != keep_id)
+        .all()
+    )
+    for snap in doomed:
+        same_day = (
+            keep is not None
+            and snap.captured_at.astimezone(timezone.utc).date()
+            == keep.captured_at.astimezone(timezone.utc).date()
+        )
+        if snap.captured_at < cutoff or same_day:
+            db.session.delete(snap)  # positions ride the delete-orphan cascade
+
+
+@bp.post("/broker/push")
+def push_snapshot():
+    """Device-token Bearer + timestamp/nonce anti-replay. Grants exactly one
+    power: storing a snapshot for the device's owner."""
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:].strip() if auth.startswith("Bearer ") else ""
+    if not token:
+        return _err("invalid_device_token", 401)
+    device = (
+        db.session.query(BrokerSyncDevice)
+        .filter_by(token_hash=_hash_device_token(token))
+        .first()
+    )
+    now = utcnow()
+    if (
+        device is None
+        or device.revoked_at is not None
+        or (device.expires_at is not None and device.expires_at < now)
+    ):
+        return _err("invalid_device_token", 401)
+
+    data = _json_body()
+    ts = _parse_ts(data.get("timestamp"))
+    if ts is None:
+        return _err("invalid_payload")
+    if abs((now - ts).total_seconds()) > config.PUSH_REPLAY_WINDOW:
+        return _err("stale_timestamp", 401)
+    nonce = _s(data.get("nonce") or "", 64).strip()
+    if not nonce:
+        return _err("invalid_payload")
+
+    captured_at = _parse_ts(data.get("capturedAt")) or ts
+    snapshot = PortfolioSnapshot(
+        user_id=device.user_id,
+        device_id=device.id,
+        nonce=nonce,
+        captured_at=captured_at,
+        base_currency=_s(data.get("baseCurrency") or "USD", 10),
+        summary=[
+            {
+                "tag": _s(item.get("tag", ""), 40),
+                "value": _parse_number(item.get("value")),
+                "currency": _s(item.get("currency") or "USD", 10),
+            }
+            for item in (data.get("summary") or [])
+            if isinstance(item, dict) and item.get("tag")
+        ][:20],
+    )
+    for item in data.get("positions") or []:
+        if not isinstance(item, dict):
+            continue
+        symbol = _s(item.get("symbol") or "", 20).strip().upper()
+        quantity = _parse_number(item.get("quantity"))
+        if not symbol or quantity is None:
+            continue
+        snapshot.positions.append(
+            PositionSnapshot(
+                symbol=symbol,
+                quantity=quantity,
+                avg_cost=_parse_number(item.get("avgCost")),
+                currency=_s(item.get("currency") or "USD", 10),
+                sec_type=_s(item.get("secType") or "STK", 10),
+            )
+        )
+    db.session.add(snapshot)
+    device.last_used_at = now
+    try:
+        db.session.flush()
+    except IntegrityError:  # (device, nonce) already used -> replay
+        db.session.rollback()
+        return _err("replay_detected", 409)
+    _prune_snapshots(device.user_id, snapshot.id)
+    db.session.commit()
+    return jsonify({"ok": True, "snapshotId": snapshot.id}), 201
+
+
+@bp.get("/broker/snapshots/latest")
+@require_user
+def latest_snapshot():
+    snap = (
+        db.session.query(PortfolioSnapshot)
+        .filter_by(user_id=current_user.id)
+        .order_by(PortfolioSnapshot.captured_at.desc())
+        .first()
+    )
+    return jsonify({"snapshot": snap.to_json() if snap else None})
+
+
+# ── Scheduled-job trigger (TL-DEPLOY-001 AWS rework) ─────────────
+
+
+@bp.post("/jobs/sync-flex")
+def trigger_flex_sweep():
+    """EventBridge Scheduler hits this daily with the X-Job-Secret header —
+    the AWS replacement for the container-job carrier. Deliberately NOT
+    session-authenticated: the secret grants exactly one power (start the
+    sweep). Answers immediately; the sweep runs on a background thread
+    because the scheduler's HTTP timeout is seconds, not minutes. Idempotent
+    by construction (dedupe downstream), so double fires are harmless."""
+    provided = request.headers.get("X-Job-Secret", "")
+    if not config.JOB_SECRET or not secrets.compare_digest(
+        provided, config.JOB_SECRET
+    ):
+        return _err("not_authenticated", 401)
+    started = flex_service.start_background_sweep(
+        current_app._get_current_object()
+    )
+    return jsonify({"started": started}), 202 if started else 200
+
+
+# ── Onboarding profile (TL-FEAT-008) ─────────────────────────────
+# Canonical answer slugs; the UI translates. Unknown values are dropped
+# server-side so the columns only ever hold vocabulary the app understands.
+
+PROFILE_EXPERIENCE = {"none", "lt1", "y1_3", "y3_5", "y5plus"}
+PROFILE_ACCOUNT_TYPES = {"personal", "prop", "paper", "none"}
+PROFILE_ASSETS = {"stocks", "etf", "options", "futures", "forex", "crypto", "other"}
+PROFILE_GOALS = {"record", "analyze", "discipline", "strategy", "review"}
+PROFILE_REFERRALS = {"search", "social", "friend", "course", "other"}
+PROFILE_BROKERS = {
+    "ibkr",
+    "schwab",
+    "fidelity",
+    "robinhood",
+    "webull",
+    "etrade",
+    "tastytrade",
+    "moomoo",
+    "other",
+    "none",
+}
+ONBOARDING_STEPS = 8  # welcome .. connect (0-based currentStep clamps to this)
+
+
+def _get_or_create_profile(user_id):
+    profile = db.session.get(UserProfile, user_id)
+    if profile is None:
+        profile = UserProfile(user_id=user_id)
+        db.session.add(profile)
+        db.session.flush()
+    return profile
+
+
+def _clean_multi(value, allowed):
+    """JSON list -> deduped list of known slugs (order preserved)."""
+    if not isinstance(value, list):
+        return []
+    out = []
+    for item in value:
+        slug = str(item)
+        if slug in allowed and slug not in out:
+            out.append(slug)
+    return out
+
+
+@bp.get("/profile")
+@require_user
+def get_profile():
+    profile = _get_or_create_profile(current_user.id)
+    db.session.commit()
+    return jsonify(profile.to_json())
+
+
+@bp.patch("/profile")
+@require_user
+def update_profile():
+    """Per-step persistence and the settings 'trading preferences' editor.
+    Every field is optional; values outside the vocabulary are rejected
+    (single-value fields) or filtered out (multi-select lists)."""
+    data = _json_body()
+    profile = _get_or_create_profile(current_user.id)
+    if "experience" in data:
+        value = data["experience"]
+        if value is not None and value not in PROFILE_EXPERIENCE:
+            return _err("invalid_payload")
+        profile.experience = value
+    if "accountTypes" in data:
+        profile.account_types = _clean_multi(data["accountTypes"], PROFILE_ACCOUNT_TYPES)
+    if "primaryBroker" in data:
+        value = data["primaryBroker"]
+        if value is not None and value not in PROFILE_BROKERS:
+            return _err("invalid_payload")
+        profile.primary_broker = value
+    if "assets" in data:
+        profile.assets = _clean_multi(data["assets"], PROFILE_ASSETS)
+    if "goals" in data:
+        profile.goals = _clean_multi(data["goals"], PROFILE_GOALS)
+    if "referralSource" in data:
+        value = data["referralSource"]
+        if value is not None and value not in PROFILE_REFERRALS:
+            return _err("invalid_payload")
+        profile.referral_source = value
+    if "currentStep" in data:
+        step = _parse_number(data["currentStep"])
+        if step is None:
+            return _err("invalid_payload")
+        profile.current_step = int(min(max(step, 0), ONBOARDING_STEPS))
+    db.session.commit()
+    return jsonify(profile.to_json())
+
+
+@bp.post("/profile/complete")
+@require_user
+def complete_onboarding():
+    """Finish (or, for legacy accounts, skip) onboarding. Idempotent: the
+    first completion timestamp wins."""
+    profile = _get_or_create_profile(current_user.id)
+    if profile.onboarding_completed_at is None:
+        profile.onboarding_completed_at = utcnow()
+    db.session.commit()
+    return jsonify(profile.to_json())
 
 
 # ── Admin: user directory (read-only) ────────────────────────────
