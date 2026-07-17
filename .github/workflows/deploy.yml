@@ -32,9 +32,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Newest push wins: a fresh deploy cancels an in-flight one (single-operator
+# pipeline; the migrate step is idempotent, so cancellation is safe).
 concurrency:
   group: deploy-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
@@ -52,6 +54,9 @@ jobs:
       # Set AWS_SUBNETS / AWS_APP_SG repo variables to change without a commit.
       SUBNETS: ${{ vars.AWS_SUBNETS || 'subnet-08b41021d844fbba4,subnet-0ab978a52584cf4d4' }}
       APP_SG: ${{ vars.AWS_APP_SG || 'sg-09131eb0aaa971a47' }}
+      # Express Mode default URL until the custom domain is bound; set the
+      # HEALTH_URL repo variable to https://mytradelens.app afterwards.
+      HEALTH_URL: ${{ vars.HEALTH_URL || 'https://tr-debccbde876f46f0b4cbe892002bcd93.ecs.us-east-2.on.aws' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,7 +106,10 @@ jobs:
           echo "waiting for the canary rollout"
           sleep 60
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' https://mytradelens.app/api/health || true)
+            # --max-time: a stalling endpoint must never hang the pipeline
+            # (a missing timeout wedged this step for an hour on 2026-07-17
+            # when the then-unbound custom domain resolved to a parking page).
+            code=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' "$HEALTH_URL/api/health" || true)
             if [ "$code" = "200" ]; then echo "healthy"; exit 0; fi
             echo "waiting ($code)"; sleep 10
           done
