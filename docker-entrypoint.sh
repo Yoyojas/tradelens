@@ -11,6 +11,13 @@
 # convenience by default.
 set -e
 
+# PRECONDITION for the one-shot modes below: the image being run MUST
+# contain THIS version of the entrypoint. An older image silently ignores
+# the command override and boots gunicorn instead — the task then "succeeds"
+# without doing the work (exactly the 2026-07-17 production incident, caused
+# by a [skip ci] commit that left ECR :latest stale). Never run one-shot
+# tasks right after a [skip ci] push; let CI rebuild the image first.
+
 if [ "$1" = "migrate" ]; then
   # One-shot mode for the CI migration task: upgrade and exit. Runs
   # unconditionally — SKIP_MIGRATIONS only governs the serve path below.

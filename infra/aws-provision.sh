@@ -72,14 +72,24 @@ a) Execution role tradelens-execution (ECR pull + logs + SSM secrets):
    Then attach the SAME ssm:GetParameters + kms:Decrypt policy on
    /tradelens/* that tradelens-apprunner-instance already carries (copy the
    inline policy across in the IAM console).
+   ALSO attach inline policy tradelens-logs — the managed execution policy
+   alone did NOT cover our custom awslogs group (hit in production
+   2026-07-17):
+   {"Version":"2012-10-17","Statement":[{"Effect":"Allow",
+     "Action":["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"],
+     "Resource":"arn:aws:logs:<REGION>:<ACCOUNT_ID>:log-group:*"}]}
 b) Infrastructure role (Express Mode manages ALB/scaling through it):
    aws iam create-role --role-name ecsInfrastructureRoleForExpressServices \\
      --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ecs.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
    aws iam attach-role-policy --role-name ecsInfrastructureRoleForExpressServices \\
      --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices
-c) Task role: REUSE tradelens-apprunner-instance unchanged (satisfies the
-   rework's reuse option; the app makes no AWS calls at runtime, so this
-   role is a harmless placeholder rather than renaming mid-flight).
+c) Task role: REUSE tradelens-apprunner-instance (the app makes no AWS
+   calls at runtime, so this role is a placeholder rather than renaming
+   mid-flight). REQUIRED FIX when reusing it (hit in production 2026-07-17):
+   its trust policy still names App Runner (tasks.apprunner.amazonaws.com)
+   and MUST be switched to ECS tasks, or task launches fail:
+   aws iam update-assume-role-policy --role-name tradelens-apprunner-instance \\
+     --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
 EOS
 
 echo "== 7. Task definition + Express Mode service =="
@@ -100,7 +110,7 @@ b) Create the Express Mode service (single task: min=max=1):
      --infrastructure-role-arn arn:aws:iam::<ACCOUNT_ID>:role/ecsInfrastructureRoleForExpressServices \
      --health-check-path "/api/health" \
      --scaling-target '{"minTaskCount":1,"maxTaskCount":1}' \
-     --network-configuration '{"subnets":["<public-subnet-1>","<public-subnet-2>"],"securityGroup":["sg-09131eb0aaa971a47"]}' \
+     --network-configuration '{"subnets":["<public-subnet-1>","<public-subnet-2>"],"securityGroups":["sg-09131eb0aaa971a47"]}' \
      --monitor-resources
    Express provisions: ALB + HTTPS listener (host-header rule) + target
    group + ACM cert for the default URL + autoscaling + log group. Wait for

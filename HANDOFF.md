@@ -26,7 +26,7 @@ Cowork（分析/规格/审阅）与 Claude Code（开发执行）的正式交接
 | TL-DATA-002 | 金额 Numeric + 分页（原 3.7） | CLOSED | 2026-07-12 用户真实验收通过（4 位精度录入） |
 | TL-PROC-003 | Finding Your Unknowns 工作流学习 | CLOSED | 2026-07-12 用户批准"平衡"档（定级权归 Cowork 可改判、Quiz 不引入）；已落入 TEMPLATE/WORKFLOW §2.5，记 D-021 |
 | TL-DISC-002 | 云端行情/持仓快照/历史同步 Discovery | CLOSED | 2026-07-12 用户拍板 Q1-Q4 均按推荐（轮询/Flex 权威/30 天/USD 美股 ETF），记 D-019、D-020 |
-| TL-DEPLOY-001 | 云部署（AWS ECS Express + mytradelens.app） | DELIVERED | ECS 快速模式返修 5 项完成（2026-07-16 三次交付，含 D-021 官方核查记录）；上线按 DEPLOY.md §1 剩余步骤执行 |
+| TL-DEPLOY-001 | 云部署（AWS ECS Express + mytradelens.app） | IN_PROGRESS | Express 服务已建成 steady state；镜像缺一次性模式致迁移未真正落库，上线收尾运维单已下发（2026-07-17，改由 CC 代执行终端操作） |
 | TL-FEAT-008 | 新用户 Onboarding | ACCEPTED | 待批次统一用户验收 |
 | TL-DATA-004 | Broker Connection Center + IBKR Flex 自动同步 | ACCEPTED | 待批次统一用户验收；每日任务承载已随 AWS 返修改为 EventBridge→job 端点 |
 | TL-DATA-005 | 行情与自选股（Alpaca IEX） | ACCEPTED | 待批次统一用户验收（需 Alpaca key） |
@@ -43,6 +43,39 @@ Backlog（未批准，不得开工）：password/set 登录态设密端点；Rep
 用户 2026-07-14 以快速下发模式批准本批全部产品决定（无需再回问 UI 命名、组件拆分、可逆实现选择）。**执行顺序**：先收尾 TL-FEAT-006（+007 Tag 切片）→ TL-DEPLOY-001 → 008 → 004 → 005 → 006 → 009。各任务独立交付、独立审阅、同 ID 返修；非阻塞范围外问题只记录。**全批停止条件**（任一触发即暂停问用户）：IBKR 官方能力与 D-019/DISC-002 结论冲突；无法安全加密并可恢复地存 Flex Token；任何方案要求保存 IBKR 密码/2FA；要求下单或资金权限；迁移有数据丢失风险；新增持续成本预计超 $20/月；需改已批 Azure 架构；无法避免 Gateway 与 Flex 双录；必须复制 TradeZella 受保护素材；代码与规格存在改变产品方向的根本冲突。其余情况取保守可逆选项继续并记录。
 **视觉总则（全批）**：沿用 TradeLens 现有深色体系；参考 TradeZella 仅限**分步结构与信息架构**（参考截图：`/Users/fyy/Downloads/微信图片_20260714225248_525_1413.png` 至 `..._532_1413.png` 共 8 张，及 `../docs/competitor_research/TradeZella_onboarding_notes.md`），禁止复制其文案、插画、商标、配色与像素级布局。桌面与窄屏完整可用；loading/empty/error/expired/offline 状态齐全；external CSS；七语言。
 **本批共同排除**：订阅/支付、AI 评分、Backtesting、Trade Replay、Mentor/社区、多券商真实 API、预测荐股、任何下单能力、无关重构。
+
+---
+
+## [Cowork → CC] TL-DEPLOY-001 · 上线收尾运维执行单（含脚本返修四项）· APPROVED（2026-07-17）
+
+**风险等级**：High（生产环境操作 + IAM/密钥相邻）。
+**背景**：用户 2026-07-17 拍板：**此后所有终端操作由 CC 在用户 Mac 上代执行**，用户只保留花钱批准与最终验收；Cowork 出规格与审阅。本单为 Express 上线收尾。执行环境：用户本机终端（`~/.aws` 凭证、区域 us-east-2、账户 634005656606），CC 直接跑命令，不再让用户手敲。
+**目标**：https://tr-debccbde876f46f0b4cbe892002bcd93.ecs.us-east-2.on.aws 可用 demo 账号正常登录进入应用。
+
+**事实与未知（现场实况盘点，2026-07-17 凌晨）**：
+- Express 服务已建成且 steady state；ALB/证书/监听器/目标组/伸缩全绿；日志组 `/aws/ecs/tradelens` 已建。
+- RDS 密码轮换与 SSM `/tradelens/database-url` 已对齐（自动管道二次写入），应用容器可连库。
+- **根因链**：返修提交 `5d67ae9` 带 `[skip ci]` → 镜像未重建 → ECR `:latest` 仍为 `77c3aad` 版（入口脚本无 migrate/seed 一次性分支）→ 一次性任务收到 command 覆盖后照常起 gunicorn → 所谓 exit 0 是假阳性 → **数据库迁移与 seed 均未真正执行**（`relation "login_attempts" does not exist` 实证）。
+- 审阅期现场发现并已修复两处（Cowork 指挥用户手工执行，按 §6 披露）：① `tradelens-apprunner-instance` 信任策略仍指 App Runner，已 `update-assume-role-policy` 改为 ecs-tasks；② `tradelens-execution` 缺 logs 权限，已建日志组并挂 `tradelens-logs` 内联策略（logs:CreateLogGroup/CreateLogStream/PutLogEvents，Resource 为 log-group:*）。
+
+**In Scope（按序执行）**：
+1. 清理流浪任务：stop 任务 `9dc472b1c5804c7288380d392e52e285` 及昨晚两个假一次性任务（若仍 RUNNING）；`list-tasks --desired-status RUNNING` 终态应只剩服务自己 1 个任务。
+2. 脚本返修四项落盘：`infra/aws-provision.sh` ① task role 信任策略模板改 ecs-tasks.amazonaws.com；② `create-express-gateway-service` 网络配置键名 `securityGroup`→`securityGroups`；③ execution role 策略补 logs 三权；`docker-entrypoint.sh` 或 CI 文档 ④ 注明一次性任务前置条件=镜像必须含当前入口脚本（禁 `[skip ci]` 后直接跑一次性任务）。
+3. GitHub variables：`AWS_SUBNETS=subnet-08b41021d844fbba4,subnet-0ab978a52584cf4d4`、`AWS_APP_SG=sg-09131eb0aaa971a47`（gh CLI 优先；未认证则列出网页操作给用户）；核对 `AWS_REGION`/`AWS_ACCOUNT_ID`/`AWS_DEPLOY_ROLE_ARN` 在位。
+4. 提交本单改动并推送（**不带 skip ci**），触发完整 CI：build → 推 ECR → 一次性 migrate（看真日志 `Running upgrade`，非仅退出码）→ force-new-deployment → 健康轮询。
+5. CI 绿后跑一次性 seed 任务（assignPublicIp=ENABLED），核对日志出现 seed 实迹。
+6. 冒烟：curl `/api/health` 200；demo 账号登录 API 返回 200（凭据用 seed 既有 demo，不得在输出中回显任何密钥/SSM 值）。
+**Out of Scope**：自定义域、Google 生产 redirect、EventBridge 定时同步（收尾验证后另发）；密码轮换长期方案（见下）。
+**Do Not Touch**：Resend 相关 DNS；RDS 实例配置；SSM 参数值（database-url 已对齐，勿动）；任何安全组规则。
+**依赖**：无。
+
+**产品决定**：终端操作代执行模式（用户 2026-07-17）。**技术约束**：D-012（密钥卫生）全程适用；轮换密码若需再对齐，沿用既有"Secrets Manager→urllib.parse.quote→SSM"管道整段执行，密码不落日志不回显。
+**数据模型影响 / API 影响 / i18n 影响**：无。
+**安全与隐私**：命令输出如含密钥立即中止并改用管道方式。
+**自动化验收**：CI 全绿；migrate 任务日志含完整 `Running upgrade` 链至 head；`login_attempts` 表存在（可由登录冒烟间接证明）；RUNNING 任务数=1。
+**手动验收（用户）**：浏览器登录 demo 走一圈 Home/Journal/Reports。
+**停止条件**：CI 同一原因失败 2 次；出现新的 IAM AccessDenied；任何步骤要求输出明文密钥；预计新增费用。
+**已知遗留（转后续任务）**：RDS 托管密码**每 7 天自动轮换**，SSM 连接串会周期性失效——治本方案（应用启动时从 Secrets Manager 现取拼接，或改用轮换感知代理）另立任务拍板，本单不处理。
 
 ---
 

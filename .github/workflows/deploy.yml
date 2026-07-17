@@ -10,6 +10,13 @@
 # `docker-entrypoint.sh migrate` once, against the freshly pushed image,
 # before triggering the deployment.
 #
+# ONE-SHOT TASK PRECONDITION: the migrate step below only works because the
+# image was rebuilt and pushed IN THIS RUN, so it contains the current
+# entrypoint. Never trigger one-shot ECS tasks after a [skip ci] commit —
+# a stale image ignores the command override and fakes success (2026-07-17
+# incident). If you must skip CI, rebuild and push the image before any
+# run-task.
+#
 # Required GitHub configuration (user sets these, never in code):
 #   secret   AWS_DEPLOY_ROLE_ARN  IAM role via GitHub OIDC (provision step 2,
 #                                 now including ecs:RunTask/UpdateService +
@@ -40,6 +47,11 @@ jobs:
       CLUSTER: default
       SERVICE: tradelens
       TASK_DEF: tradelens
+      # Repo variables override; the literals are the provisioned us-east-2
+      # values (subnet/SG ids are not secrets — they are already in infra/).
+      # Set AWS_SUBNETS / AWS_APP_SG repo variables to change without a commit.
+      SUBNETS: ${{ vars.AWS_SUBNETS || 'subnet-08b41021d844fbba4,subnet-0ab978a52584cf4d4' }}
+      APP_SG: ${{ vars.AWS_APP_SG || 'sg-09131eb0aaa971a47' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -64,11 +76,11 @@ jobs:
 
       - name: Run database migration (one-shot ECS task)
         run: |
-          SUBNETS=$(echo "${{ vars.AWS_SUBNETS }}" | sed 's/,/","/g')
+          SUBNET_LIST=$(echo "$SUBNETS" | sed 's/,/","/g')
           TASK_ARN=$(aws ecs run-task \
             --cluster "$CLUSTER" --launch-type FARGATE \
             --task-definition "$TASK_DEF" \
-            --network-configuration "{\"awsvpcConfiguration\":{\"subnets\":[\"$SUBNETS\"],\"securityGroups\":[\"${{ vars.AWS_APP_SG }}\"],\"assignPublicIp\":\"ENABLED\"}}" \
+            --network-configuration "{\"awsvpcConfiguration\":{\"subnets\":[\"$SUBNET_LIST\"],\"securityGroups\":[\"$APP_SG\"],\"assignPublicIp\":\"ENABLED\"}}" \
             --overrides '{"containerOverrides":[{"name":"Main","command":["migrate"]}]}' \
             --query 'tasks[0].taskArn' --output text)
           echo "migration task: $TASK_ARN"
