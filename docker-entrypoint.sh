@@ -1,14 +1,28 @@
 #!/bin/sh
-# Container entrypoint (TL-DEPLOY-001, AWS App Runner).
+# Container entrypoint (TL-DEPLOY-001, AWS ECS Express Mode).
 #
-# Alembic migrations run HERE, before gunicorn starts, as the explicit
-# deploy-time migration step. Safe under the provisioned setup: App Runner
-# auto-scaling is pinned to max size 1 (see infra/aws-provision.sh step 6),
-# so at most one instance ever runs the upgrade; during a rolling deploy the
-# OLD instance may briefly serve old code against the new schema, which is
-# fine while migrations stay additive (all current ones are). If scaling is
-# ever opened up, move this into a one-shot CI step first.
+# PRODUCTION migrations run as a one-shot CI task (`docker-entrypoint.sh
+# migrate` via `aws ecs run-task`, see .github/workflows/deploy.yml) BEFORE
+# the service redeploys. Reason: ECS Express Mode forces canary deployments
+# and its deployment strategy cannot be changed (official docs, accessed
+# 2026-07-16), so old and new service tasks WILL coexist — an entrypoint
+# migration would race itself. The service's task definition therefore sets
+# SKIP_MIGRATIONS=1; local `docker run` keeps the migrate-on-boot
+# convenience by default.
 set -e
+
+if [ "$1" = "migrate" ]; then
+  # One-shot mode for the CI migration task: upgrade and exit. Runs
+  # unconditionally — SKIP_MIGRATIONS only governs the serve path below.
+  echo "[entrypoint] one-shot migration"
+  exec flask --app app db upgrade
+fi
+
+if [ "$1" = "seed" ]; then
+  # One-shot production init (demo/admin/library/shared tags; idempotent).
+  echo "[entrypoint] one-shot seed"
+  exec python seed.py
+fi
 
 if [ "${SKIP_MIGRATIONS:-0}" != "1" ]; then
   echo "[entrypoint] applying database migrations"

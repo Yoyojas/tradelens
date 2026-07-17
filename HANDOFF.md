@@ -26,7 +26,7 @@ Cowork（分析/规格/审阅）与 Claude Code（开发执行）的正式交接
 | TL-DATA-002 | 金额 Numeric + 分页（原 3.7） | CLOSED | 2026-07-12 用户真实验收通过（4 位精度录入） |
 | TL-PROC-003 | Finding Your Unknowns 工作流学习 | CLOSED | 2026-07-12 用户批准"平衡"档（定级权归 Cowork 可改判、Quiz 不引入）；已落入 TEMPLATE/WORKFLOW §2.5，记 D-021 |
 | TL-DISC-002 | 云端行情/持仓快照/历史同步 Discovery | CLOSED | 2026-07-12 用户拍板 Q1-Q4 均按推荐（轮询/Flex 权威/30 天/USD 美股 ETF），记 D-019、D-020 |
-| TL-DEPLOY-001 | 云部署（AWS + mytradelens.app） | ACCEPTED | AWS 返修过审；上线待用户按 DEPLOY.md 11 步操作（Cowork 领路），公网验收后 USER_VERIFIED |
+| TL-DEPLOY-001 | 云部署（AWS ECS Express + mytradelens.app） | DELIVERED | ECS 快速模式返修 5 项完成（2026-07-16 三次交付，含 D-021 官方核查记录）；上线按 DEPLOY.md §1 剩余步骤执行 |
 | TL-FEAT-008 | 新用户 Onboarding | ACCEPTED | 待批次统一用户验收 |
 | TL-DATA-004 | Broker Connection Center + IBKR Flex 自动同步 | ACCEPTED | 待批次统一用户验收；每日任务承载已随 AWS 返修改为 EventBridge→job 端点 |
 | TL-DATA-005 | 行情与自选股（Alpaca IEX） | ACCEPTED | 待批次统一用户验收（需 Alpaca key） |
@@ -43,6 +43,44 @@ Backlog（未批准，不得开工）：password/set 登录态设密端点；Rep
 用户 2026-07-14 以快速下发模式批准本批全部产品决定（无需再回问 UI 命名、组件拆分、可逆实现选择）。**执行顺序**：先收尾 TL-FEAT-006（+007 Tag 切片）→ TL-DEPLOY-001 → 008 → 004 → 005 → 006 → 009。各任务独立交付、独立审阅、同 ID 返修；非阻塞范围外问题只记录。**全批停止条件**（任一触发即暂停问用户）：IBKR 官方能力与 D-019/DISC-002 结论冲突；无法安全加密并可恢复地存 Flex Token；任何方案要求保存 IBKR 密码/2FA；要求下单或资金权限；迁移有数据丢失风险；新增持续成本预计超 $20/月；需改已批 Azure 架构；无法避免 Gateway 与 Flex 双录；必须复制 TradeZella 受保护素材；代码与规格存在改变产品方向的根本冲突。其余情况取保守可逆选项继续并记录。
 **视觉总则（全批）**：沿用 TradeLens 现有深色体系；参考 TradeZella 仅限**分步结构与信息架构**（参考截图：`/Users/fyy/Downloads/微信图片_20260714225248_525_1413.png` 至 `..._532_1413.png` 共 8 张，及 `../docs/competitor_research/TradeZella_onboarding_notes.md`），禁止复制其文案、插画、商标、配色与像素级布局。桌面与窄屏完整可用；loading/empty/error/expired/offline 状态齐全；external CSS；七语言。
 **本批共同排除**：订阅/支付、AI 评分、Backtesting、Trade Replay、Mentor/社区、多券商真实 API、预测荐股、任何下单能力、无关重构。
+
+---
+
+## [Cowork] TL-DEPLOY-001 · 阻断实况与用户决策（2026-07-16）
+
+**新事实（未知未知落网）**：AWS 控制台横幅明示 App Runner 自 2026-04-30 不再接受新客户，现有服务可运行但无法新建——部署 Discovery 核验了其功能与价格却未核验"是否仍接受新客"，教训记入：外部服务核查清单增加"当前可用性/生命周期状态"一项（并入 COWORK_WORKFLOW §2.5 Blind Spot Pass 第⑤问的执行口径）。
+**用户决策**：在 A（ECS 快速模式，AWS 官方推荐迁移方向，长期约 $26-29/月）与 B（Lightsail $7/月）之间选 **A**，并接受成本线由 $20 上调至 **$35/月**（Budgets 告警同步调整）。触发的停止条件按规程处理完毕。
+**资产盘点（全部保留）**：ECR 仓库与 :latest 镜像、GitHub OIDC 角色、RDS（available，密码已轮换且经自动管道入 SSM）、SSM /tradelens/* 全部 12 参数、tradelens-apprunner-instance 角色（可复用为 ECS task role）、安全组两枚。
+
+---
+
+## [Cowork → CC] TL-DEPLOY-001 · CHANGES_REQUESTED（第二次：App Runner → ECS 快速模式）
+
+**风险等级**：High。**前置要求（D-021）**：实施前先查 ECS Express Mode 官方文档（含当前可用性），记录访问日期；其能力假设不得凭记忆。
+**返修项**：
+1. `infra/aws-provision.sh` 第 6-7 步改写为 ECS 快速模式：从 ECR :latest 建服务（0.25 vCPU/0.5GB、端口 8000、健康检查 /api/health、期望任务数 1）；task role 复用 tradelens-apprunner-instance（改名或另建 tradelens-task 均可，注明）；execution role 需 ECR 拉取 + SSM SecureString 读取（secrets valueFrom 用参数 ARN）；环境变量与 12 条 SSM secrets 清单沿用原规格；网络用默认 VPC 子网 + APP_SG（sg-09131eb0aaa971a47），DB SG 已放行该组无需改。
+2. **迁移时序**：ECS 滚动部署可能双任务并存，entrypoint 迁移存在并发风险——部署配置取 minimumHealthyPercent=0 / maximumPercent=100（先停旧再起新，可接受短暂停机）或将迁移挪为 CI 一次性步骤，二选一并注明理由。
+3. CI：部署触发改为 `aws ecs update-service --force-new-deployment`（OIDC 角色补 ecs:UpdateService 等最小权限），健康检查轮询保留。
+4. 自定义域：ALB + ACM 证书 + Namecheap ALIAS/CNAME 路径重写指南（Resend 记录不动警示保留）；www 301 逻辑不变。
+5. DEPLOY.md 全量更新（含成本节改 $35 线与 ALB 固定费说明、EventBridge 第 8 步端点不变）。
+**停止条件**：ECS Express 官方现状与本单假设冲突时停；其余沿用批次十条（成本线按 $35 执行）。同一 Task ID 交付。
+
+---
+
+## [CC → Cowork] TL-DEPLOY-001 · ECS 快速模式返修完成 · DELIVERED（三次交付）
+
+**D-021 前置核查（官方文档，访问日期 2026-07-16）**：ECS Express Mode 真实存在且 GA（2025-11 发布，2026-06 扩至 GovCloud），覆盖全部 ECS+Fargate 区域含 us-east-2；API 为 `aws ecs create-express-gateway-service`；创建资源清单（ALB+HTTPS 监听 host-header 规则+目标组+默认域名 ACM 证书+目标追踪伸缩+日志组+5XX 回滚告警）、自定义域官方步骤、资源直改持久性（"Express Mode will not overwrite changes unless requested as part of an Express Mode update"）均已逐页核对。来源：developerguide 的 express-service-getting-started / express-service-work / express-service-advanced-customization 三页（链接留存于 aws-provision.sh 头注）。**与返修单假设的两处出入**（均在返修单预留的选择空间内，未触发停止条件）：① 部署策略固定 Canary 且官方明示不可更改，返修项 2 的"min 0/max 100 先停后起"不可用；② `--primary-container` 无 secrets 字段且 `--cpu` 仅整 vCPU，0.25 vCPU + 12 条 SSM secrets 需走官方自带任务定义路径（"uses your task definition as-is"）。
+
+**按返修项逐条**：
+1. **infra**：`aws-provision.sh` 第 6-7 步改写——新 `tradelens-execution` 执行角色（**语义修正并注明：ECS 中读 SSM SecureString 的是 execution role 而非 task role**，App Runner 时代 instance role 的 SSM 策略复制到执行角色）+ 官方 `ecsInfrastructureRoleForExpressServices`（托管策略）；task role **复用 tradelens-apprunner-instance 原名**（应用运行时零 AWS 调用，占位即可，选择已注明）。新 `infra/taskdef-template.json`：容器名 Main、单一命名 TCP 端口 8000、cpu 256/memory 512、12 条 secrets 按参数 ARN valueFrom、环境变量沿用原规格并加 `SKIP_MIGRATIONS=1`、awslogs 日志组。服务经 `create-express-gateway-service --task-definition-arn`（/api/health 健康检查、scaling min=max=1、默认 VPC 公有子网 + APP_SG，DB SG 无需改）。首次初始化改为两个一次性任务按序 `migrate`、`seed`。
+2. **迁移时序（二选一：选 CI 一次性步骤）**：理由=Express 强制 Canary 不可改，选项 A 的部署参数不存在；新旧任务并存下入口迁移会自我竞态。实现：服务任务 `SKIP_MIGRATIONS=1`；`docker-entrypoint.sh` 增 `migrate`/`seed` 一次性模式（command 覆盖走 ENTRYPOINT 参数，因 ECS containerOverrides 只能覆盖 command 不能覆盖 entryPoint）；本地 docker run 无参仍默认开机自迁移。Canary 窗口内旧代码短暂运行新 schema，迁移保持加法式（现状满足），已写入 DEPLOY.md §3。
+3. **CI**：build → 推 ECR :sha/:latest → **`aws ecs run-task` 跑 migrate 一次性任务并等退出码 0（非 0 中止发布）** → `aws ecs update-service --force-new-deployment`（:latest 在新部署时重解析 digest，官方 versionConsistency 语义）→ 健康轮询保留。OIDC 角色补最小权限（ecs:RunTask/UpdateService/Describe* 限定 default 集群 + iam:PassRole 限定两角色），策略模板在 provision 第 1-5 步说明；GitHub 新增 AWS_SUBNETS/AWS_APP_SG 两个 variables。
+4. **自定义域**：按官方 Express 路径重写（provision 第 8 步）——ACM 证书（DNS 验证 CNAME 入 Namecheap）→ ALB 监听规则 host-header 加 OR 条件（保留 .on.aws 默认值，加裸域与 www）→ 监听器挂证书 → Namecheap ALIAS @ / CNAME www 指向 ALB DNS 名；**Resend 记录不动警示保留**；www→裸域 301 应用层不变；手工改动持久性已经官方文档确认。
+5. **DEPLOY.md 全量更新**：架构与背景（App Runner 停收实证 + $35 拍板）、§1 剩余步骤清单（已完成资产标注跳过）、§3 迁移语义、§4 回滚（旧 sha 重打 :latest + Express 自带 5XX 回滚告警）、§7 成本节——**ALB 固定费约 $16-17/月为主要新增项**（同 VPC 25 服务共享的摊薄特性已注明）、合计约 $26-29/月、**RDS 免费档到期后合计约 $38-42 将越 $35 线的提前预警**、告警阈值 $28；§9 EventBridge 第 8→9 步端点不变。
+**自检（自动化证据）**：`bash -n`/`sh -n` 两脚本语法过；taskdef 模板 JSON 程序化断言（Main/单端口命名/256/512/12 secrets/SKIP_MIGRATIONS=1/FARGATE）；workflow 过 yaml-lint 且步骤顺序断言 build(56)→migrate(65)→roll(81)→health(87)；**入口脚本两种一次性模式真实执行验证**（migrate 对已在 head 的开发库幂等空跑、seed 幂等跳过）；例行基线 py_compile 28 文件 / i18n 551 × 7 / build 全过。业务代码零改动（本次仅 entrypoint sh、infra、CI、文档）。
+**发现项**：无。
+**不确定点**：① Express 默认伸缩指标为 CPU 目标追踪，min=max=1 下不起作用，保留默认未调；② 一次性任务需 assignPublicIp=ENABLED（默认 VPC 公有子网拉 ECR 镜像所需），已写入命令；③ ALB 监听规则的 OR host-header 上限与证书配额在多服务场景才需关注，单服务无碍（官方页有提额提示，已在指南 8 步末尾保留原文提醒的语义）。
+**子代理使用**：0 个。
 
 ---
 

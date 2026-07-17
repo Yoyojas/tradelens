@@ -1,16 +1,23 @@
-# TL-DEPLOY-001 (AWS): push to main -> build image -> push to Amazon ECR.
-# The App Runner service is created with auto-deployments ENABLED on the
-# :latest tag, so an ECR push IS the deployment trigger (chosen over an
-# explicit `aws apprunner start-deployment` — one moving part fewer; the
-# health-check step below still verifies the rollout landed).
-# Database migrations run inside the container entrypoint on boot
-# (single-instance autoscaling, max size 1 — see docker-entrypoint.sh).
+# TL-DEPLOY-001 (AWS · ECS Express Mode): push to main -> build image ->
+# push to ECR -> run the DB migration as a ONE-SHOT ECS task -> roll the
+# service -> verify health.
+#
+# Why the migration is a CI step and not the container entrypoint: ECS
+# Express Mode forces canary deployments and its deployment strategy cannot
+# be changed (official docs, accessed 2026-07-16), so old and new service
+# tasks coexist during a rollout — boot-time migrations would race. The
+# service's task definition sets SKIP_MIGRATIONS=1; this workflow runs
+# `docker-entrypoint.sh migrate` once, against the freshly pushed image,
+# before triggering the deployment.
 #
 # Required GitHub configuration (user sets these, never in code):
-#   secret  AWS_DEPLOY_ROLE_ARN   IAM role assumed via GitHub OIDC
-#                                 (infra/aws-provision.sh step 2)
-#   variable AWS_REGION           us-east-2 (or us-east-1 on full fallback)
+#   secret   AWS_DEPLOY_ROLE_ARN  IAM role via GitHub OIDC (provision step 2,
+#                                 now including ecs:RunTask/UpdateService +
+#                                 iam:PassRole — see infra/aws-provision.sh)
+#   variable AWS_REGION           us-east-2 (us-east-1 on full fallback)
 #   variable AWS_ACCOUNT_ID       12-digit account id
+#   variable AWS_SUBNETS          comma-separated default-VPC public subnets
+#   variable AWS_APP_SG           tradelens-app security group id
 name: deploy
 
 on:
@@ -30,6 +37,9 @@ jobs:
       contents: read
     env:
       ECR_REPO: tradelens
+      CLUSTER: default
+      SERVICE: tradelens
+      TASK_DEF: tradelens
     steps:
       - uses: actions/checkout@v4
 
@@ -52,9 +62,31 @@ jobs:
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }}
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO }}:latest
 
-      - name: Health check (App Runner auto-deploys on the :latest push)
+      - name: Run database migration (one-shot ECS task)
         run: |
-          echo "waiting for App Runner to roll out the new image"
+          SUBNETS=$(echo "${{ vars.AWS_SUBNETS }}" | sed 's/,/","/g')
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" --launch-type FARGATE \
+            --task-definition "$TASK_DEF" \
+            --network-configuration "{\"awsvpcConfiguration\":{\"subnets\":[\"$SUBNETS\"],\"securityGroups\":[\"${{ vars.AWS_APP_SG }}\"],\"assignPublicIp\":\"ENABLED\"}}" \
+            --overrides '{"containerOverrides":[{"name":"Main","command":["migrate"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          echo "migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "migration exit code: $EXIT_CODE"
+          [ "$EXIT_CODE" = "0" ] || { echo "migration failed"; exit 1; }
+
+      - name: Roll the service to the new image
+        run: |
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
+            --force-new-deployment >/dev/null
+          echo "deployment triggered (canary; :latest re-resolves to the new digest)"
+
+      - name: Health check
+        run: |
+          echo "waiting for the canary rollout"
           sleep 60
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' https://mytradelens.app/api/health || true)

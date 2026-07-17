@@ -1,0 +1,51 @@
+{
+  "family": "tradelens",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/tradelens-execution",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/tradelens-apprunner-instance",
+  "containerDefinitions": [
+    {
+      "name": "Main",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/tradelens:latest",
+      "essential": true,
+      "portMappings": [
+        { "name": "web", "containerPort": 8000, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "FLASK_DEBUG", "value": "0" },
+        { "name": "TRUST_PROXY", "value": "1" },
+        { "name": "COOKIE_SECURE", "value": "1" },
+        { "name": "SKIP_MIGRATIONS", "value": "1" },
+        { "name": "FRONTEND_URL", "value": "https://mytradelens.app" },
+        { "name": "CORS_ORIGINS", "value": "https://mytradelens.app" },
+        { "name": "GOOGLE_REDIRECT_URI", "value": "https://mytradelens.app/api/auth/google/callback" }
+      ],
+      "secrets": [
+        { "name": "SECRET_KEY", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/secret-key" },
+        { "name": "DATABASE_URL", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/database-url" },
+        { "name": "ADMIN_EMAIL", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/admin-email" },
+        { "name": "ADMIN_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/admin-password" },
+        { "name": "GOOGLE_CLIENT_ID", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/google-client-id" },
+        { "name": "GOOGLE_CLIENT_SECRET", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/google-client-secret" },
+        { "name": "MAIL_USERNAME", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/mail-username" },
+        { "name": "MAIL_APP_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/mail-app-password" },
+        { "name": "FLEX_TOKEN_KEY", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/flex-token-key" },
+        { "name": "ALPACA_KEY_ID", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/alpaca-key-id" },
+        { "name": "ALPACA_SECRET", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/alpaca-secret" },
+        { "name": "JOB_SECRET", "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/tradelens/job-secret" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/aws/ecs/tradelens",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "app",
+          "awslogs-create-group": "true"
+        }
+      }
+    }
+  ]
+}

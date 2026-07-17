@@ -1,160 +1,145 @@
 #!/bin/bash
-# TL-DEPLOY-001 (AWS) · Provisioning guide for TradeLens.
+# TL-DEPLOY-001 (AWS · ECS Express Mode) · Provisioning guide for TradeLens.
 #
 # RUN THESE STEP BY STEP, BY HAND (user executes; Cowork walks you through).
 # Nothing here contains a secret value — placeholders <...> are yours to fill
 # in the AWS console/CLI, never in chat or git.
 #
-# Region policy: us-east-2 (Ohio) first; if anything is unavailable there,
-# redo EVERYTHING in us-east-1 — no split-region deployments.
+# Second rework (2026-07-16): App Runner stopped accepting new customers, so
+# the compute layer is now Amazon ECS Express Mode (GA since 2025-11; the
+# official AWS-recommended migration direction). Capabilities below follow
+# the official docs, accessed 2026-07-16:
+#   https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-service-getting-started.html
+#   https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-service-work.html
+#   https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-service-advanced-customization.html
 #
-# PREREQS:
-#   1. AWS account (credit card required), `aws configure` done with an IAM
-#      user (NOT root) that has admin for this setup session.
-#   2. A Budgets alarm BEFORE creating anything (step 0) — the $20/month line
-#      is a hard batch stop-condition.
+# ALREADY DONE (kept from the first pass — do NOT recreate):
+#   ECR repo + :latest image · GitHub OIDC role · RDS (available; password in
+#   SSM) · all 12 SSM /tradelens/* parameters · role
+#   tradelens-apprunner-instance · security groups tradelens-app / tradelens-db.
+#
+# Region policy: us-east-2 (Ohio); full fallback to us-east-1 only as a whole.
 set -euo pipefail
 
 REGION="${REGION:-us-east-2}"
 REPO="tradelens"
 SERVICE="tradelens"
-DB_ID="tradelens-pg"
 DOMAIN="mytradelens.app"
+APP_SG="sg-09131eb0aaa971a47" # tradelens-app (already exists; DB SG allows it)
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 
 run() { echo ""; echo ">>> $*"; "$@"; }
 
-echo "== 0. Budget alarm FIRST (\$20/month, email notification) =="
+echo "== 0. Budget alarm — UPDATE to \$35/month (user decision 2026-07-16) =="
 cat <<'EOS'
-aws budgets create-budget --account-id <ACCOUNT_ID> \
-  --budget '{"BudgetName":"tradelens-monthly","BudgetLimit":{"Amount":"20","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}' \
-  --notifications-with-subscribers '[{"Notification":{"NotificationType":"ACTUAL","ComparisonOperator":"GREATER_THAN","Threshold":80},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"<your-email>"}]}]'
+aws budgets update-budget --account-id <ACCOUNT_ID> \
+  --new-budget '{"BudgetName":"tradelens-monthly","BudgetLimit":{"Amount":"35","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}'
+# (80% notification threshold carries over: alarm now fires at $28.)
 EOS
 
-echo "== 1. ECR repository =="
-run aws ecr create-repository --region "$REGION" --repository-name "$REPO" \
-  --image-scanning-configuration scanOnPush=true
+echo "== 1-5. DONE in the first pass =="
+cat <<'EOS'
+1 ECR · 2 GitHub OIDC role · 3 security groups · 4 RDS · 5 SSM parameters.
+Only ONE addition in step 2's role: the CI role needs ECS deploy permissions
+now. Attach this inline policy to the tradelens-deploy role:
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow",
+      "Action": ["ecs:RunTask", "ecs:UpdateService", "ecs:DescribeServices",
+                 "ecs:DescribeTasks"],
+      "Resource": "*",
+      "Condition": {"ArnEquals": {"ecs:cluster": "arn:aws:ecs:<REGION>:<ACCOUNT_ID>:cluster/default"}} },
+    { "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": ["arn:aws:iam::<ACCOUNT_ID>:role/tradelens-execution",
+                   "arn:aws:iam::<ACCOUNT_ID>:role/tradelens-apprunner-instance"] }
+  ]
+}
+GitHub variables to add: AWS_SUBNETS (comma-separated default-VPC public
+subnet ids), AWS_APP_SG (sg-09131eb0aaa971a47).
+EOS
 
-echo "== 2. GitHub OIDC role (CI pushes images without long-lived keys) =="
+echo "== 6. IAM roles for ECS Express Mode =="
 cat <<EOS
-a) One-time OIDC provider (skip if it exists):
-   aws iam create-open-id-connect-provider \\
-     --url https://token.actions.githubusercontent.com \\
-     --client-id-list sts.amazonaws.com
-b) Create role tradelens-deploy with this trust policy (restricts to your
-   repo's main branch), then attach a policy allowing ecr:* on the $REPO
-   repository + ecr:GetAuthorizationToken:
-   {
-     "Version": "2012-10-17",
-     "Statement": [{
-       "Effect": "Allow",
-       "Principal": {"Federated": "arn:aws:iam::$ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"},
-       "Action": "sts:AssumeRoleWithWebIdentity",
-       "Condition": {
-         "StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"},
-         "StringLike": {"token.actions.githubusercontent.com:sub": "repo:Yoyojas/tradelens:ref:refs/heads/main"}
-       }
-     }]
-   }
-c) GitHub repo settings: secret AWS_DEPLOY_ROLE_ARN = the role ARN;
-   variables AWS_REGION=$REGION, AWS_ACCOUNT_ID=$ACCOUNT_ID.
-d) Push main once so :latest lands in ECR before creating App Runner.
+Role semantics NOTE (differs from App Runner): in ECS, SSM SecureString
+secrets are fetched by the EXECUTION role, not the task role.
+a) Execution role tradelens-execution (ECR pull + logs + SSM secrets):
+   aws iam create-role --role-name tradelens-execution \\
+     --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ecs-tasks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+   aws iam attach-role-policy --role-name tradelens-execution \\
+     --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+   Then attach the SAME ssm:GetParameters + kms:Decrypt policy on
+   /tradelens/* that tradelens-apprunner-instance already carries (copy the
+   inline policy across in the IAM console).
+b) Infrastructure role (Express Mode manages ALB/scaling through it):
+   aws iam create-role --role-name ecsInfrastructureRoleForExpressServices \\
+     --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ecs.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+   aws iam attach-role-policy --role-name ecsInfrastructureRoleForExpressServices \\
+     --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices
+c) Task role: REUSE tradelens-apprunner-instance unchanged (satisfies the
+   rework's reuse option; the app makes no AWS calls at runtime, so this
+   role is a harmless placeholder rather than renaming mid-flight).
 EOS
 
-echo "== 3. Security groups (default VPC) =="
+echo "== 7. Task definition + Express Mode service =="
 cat <<'EOS'
-VPC_ID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
-APP_SG=$(aws ec2 create-security-group --group-name tradelens-app --description "App Runner VPC connector" --vpc-id $VPC_ID --query GroupId --output text)
-DB_SG=$(aws ec2 create-security-group --group-name tradelens-db --description "RDS - only from app SG" --vpc-id $VPC_ID --query GroupId --output text)
-aws ec2 authorize-security-group-ingress --group-id $DB_SG --protocol tcp --port 5432 --source-group $APP_SG
+Why bring-your-own task definition: Express Mode's --primary-container has
+no documented `secrets` field and --cpu only takes whole vCPUs; the official
+BYO-task-definition path ("Express Mode uses your task definition as-is")
+gives us 0.25 vCPU / 0.5 GB AND the 12 SSM secrets via valueFrom. Container
+MUST be named "Main" with a single named TCP port mapping (official
+requirement — infra/taskdef-template.json complies).
+
+a) Fill <ACCOUNT_ID>/<REGION> in infra/taskdef-template.json, then:
+   aws ecs register-task-definition --cli-input-json file://infra/taskdef-template.json
+b) Create the Express Mode service (single task: min=max=1):
+   aws ecs create-express-gateway-service \
+     --service-name tradelens \
+     --task-definition-arn arn:aws:ecs:<REGION>:<ACCOUNT_ID>:task-definition/tradelens:1 \
+     --infrastructure-role-arn arn:aws:iam::<ACCOUNT_ID>:role/ecsInfrastructureRoleForExpressServices \
+     --health-check-path "/api/health" \
+     --scaling-target '{"minTaskCount":1,"maxTaskCount":1}' \
+     --network-configuration '{"subnets":["<public-subnet-1>","<public-subnet-2>"],"securityGroup":["sg-09131eb0aaa971a47"]}' \
+     --monitor-resources
+   Express provisions: ALB + HTTPS listener (host-header rule) + target
+   group + ACM cert for the default URL + autoscaling + log group. Wait for
+   ACTIVE, then note the URL: https://tradelens-xxxx.ecs.<REGION>.on.aws
+c) First boot: the service comes up WITHOUT tables (SKIP_MIGRATIONS=1 by
+   design — migrations are a separate one-shot step now). Initialize once,
+   two one-shot tasks in order (docker-entrypoint.sh modes migrate | seed);
+   wait for each to reach STOPPED with exit code 0 before the next:
+   aws ecs run-task --cluster default --launch-type FARGATE \
+     --task-definition tradelens \
+     --network-configuration 'awsvpcConfiguration={subnets=[<public-subnet-1>,<public-subnet-2>],securityGroups=[sg-09131eb0aaa971a47],assignPublicIp=ENABLED}' \
+     --overrides '{"containerOverrides":[{"name":"Main","command":["migrate"]}]}'
+   aws ecs run-task --cluster default --launch-type FARGATE \
+     --task-definition tradelens \
+     --network-configuration 'awsvpcConfiguration={subnets=[<public-subnet-1>,<public-subnet-2>],securityGroups=[sg-09131eb0aaa971a47],assignPublicIp=ENABLED}' \
+     --overrides '{"containerOverrides":[{"name":"Main","command":["seed"]}]}'
 EOS
 
-echo "== 4. RDS PostgreSQL 17 (free tier: db.t4g.micro, 20GB, NOT public) =="
+echo "== 8. Custom domain (official Express Mode path, docs accessed 2026-07-16) =="
 cat <<'EOS'
-aws rds create-db-instance \
-  --db-instance-identifier tradelens-pg \
-  --engine postgres --engine-version 17 \
-  --db-instance-class db.t4g.micro \
-  --allocated-storage 20 --storage-type gp3 \
-  --master-username tladmin --manage-master-user-password \
-  --db-name tradelens \
-  --no-publicly-accessible \
-  --vpc-security-group-ids $DB_SG \
-  --backup-retention-period 7
-# Endpoint + the managed master password live in the console (RDS + Secrets
-# Manager). DATABASE_URL = postgresql://tladmin:<pw>@<endpoint>/tradelens?sslmode=require
+a) ACM certificate (region of the ALB): request cert for mytradelens.app +
+   www.mytradelens.app, DNS validation. Namecheap: ADD the two validation
+   CNAMEs (never touch Resend TXT/MX/DKIM records).
+b) ALB listener rule (console: ECS service -> Resources -> listener rule ->
+   Edit Rule): keep the existing Host-header value (the .on.aws URL), "Add
+   OR condition value" for mytradelens.app AND www.mytradelens.app; save.
+c) Listener -> Certificates tab -> Add certificate: attach the ACM cert.
+   (Manual edits persist: per official docs Express Mode does not overwrite
+   changes unless an Express update directly conflicts.)
+d) Namecheap: ALIAS @ -> <ALB DNS name>; CNAME www -> <ALB DNS name>.
+   The app 301-redirects www to the apex (backend/app.py).
 EOS
 
-echo "== 5. SSM parameters (App Runner reads secrets from here) =="
+echo "== 9. Daily Flex sync via EventBridge Scheduler -> HTTPS (UNCHANGED) =="
 cat <<'EOS'
-For each name below: aws ssm put-parameter --type SecureString --name <name> --value '<value>'
-  /tradelens/secret-key         64-hex random
-  /tradelens/database-url       (from step 4, keep ?sslmode=require)
-  /tradelens/admin-email        /tradelens/admin-password   (new strong random)
-  /tradelens/google-client-id   /tradelens/google-client-secret
-  /tradelens/mail-username      /tradelens/mail-app-password
-  /tradelens/flex-token-key     (Fernet key — same generator as before)
-  /tradelens/alpaca-key-id      /tradelens/alpaca-secret
-  /tradelens/job-secret         64-hex random (EventBridge sync trigger)
-EOS
-
-echo "== 6. App Runner service (0.25 vCPU / 0.5 GB, max size 1) =="
-cat <<'EOS'
-a) Instance role: create role tradelens-apprunner-instance with a policy
-   allowing ssm:GetParameters + kms:Decrypt on /tradelens/*.
-b) ECR access role: use the console default (AppRunnerECRAccessRole).
-c) Create the service (console is easiest):
-   - Source: ECR image <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/tradelens:latest
-   - Deployments: AUTOMATIC (ECR push = deploy; matches deploy.yml)
-   - Port 8000; health check path /api/health
-   - CPU 0.25 vCPU, memory 0.5 GB
-   - Auto scaling: create config max size 1, min 1 (single instance =
-     entrypoint migrations run exactly once per rollout)
-   - Networking: outgoing traffic -> Custom VPC connector (default VPC
-     subnets + $APP_SG) so the app reaches the private RDS
-   - Env: FLASK_DEBUG=0 TRUST_PROXY=1 COOKIE_SECURE=1
-          FRONTEND_URL=https://mytradelens.app
-          CORS_ORIGINS=https://mytradelens.app
-          GOOGLE_REDIRECT_URI=https://mytradelens.app/api/auth/google/callback
-   - Secrets (reference SSM parameters from step 5):
-          SECRET_KEY DATABASE_URL ADMIN_EMAIL ADMIN_PASSWORD
-          GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET MAIL_USERNAME
-          MAIL_APP_PASSWORD FLEX_TOKEN_KEY ALPACA_KEY_ID ALPACA_SECRET
-          JOB_SECRET
-d) First boot only: temporarily add env RUN_SEED=1 (seeds demo/admin/library),
-   verify, then remove it (each change redeploys).
-EOS
-
-echo "== 7. Custom domain =="
-cat <<'EOS'
-aws apprunner associate-custom-domain --service-arn <service-arn> --domain-name mytradelens.app --enable-www-subdomain
-Then in Namecheap ADD ONLY (never touch the existing Resend TXT/MX/DKIM):
-  - the certificate-validation CNAME records the command returns
-  - ALIAS  @    <apprunner-dns-target>   (Namecheap ALIAS type for the apex)
-  - CNAME  www  <apprunner-dns-target>
-The app 301-redirects www to the apex (backend/app.py).
-EOS
-
-echo "== 8. Daily Flex sync via EventBridge Scheduler -> HTTPS =="
-cat <<'EOS'
-EventBridge rule + API destination (no extra container):
-a) Connection (holds the job secret as an API-key header):
-   aws events create-connection --name tradelens-sync \
-     --authorization-type API_KEY \
-     --auth-parameters '{"ApiKeyAuthParameters":{"ApiKeyName":"X-Job-Secret","ApiKeyValue":"<job-secret from step 5>"}}'
-b) API destination:
-   aws events create-api-destination --name tradelens-sync \
-     --connection-arn <connection-arn> \
-     --invocation-endpoint https://mytradelens.app/api/jobs/sync-flex \
-     --http-method POST --invocation-rate-limit-per-second 1
-c) Rule: 09:00 UTC Tue-Sat = the morning AFTER each U.S. trading day
-   (Activity statements update overnight; IBKR advises next-day fetch):
-   aws events put-rule --name tradelens-sync-daily --schedule-expression "cron(0 9 ? * TUE-SAT *)"
-   aws events put-targets --rule tradelens-sync-daily \
-     --targets '[{"Id":"1","Arn":"<api-destination-arn>","RoleArn":"<events-invoke-role-arn>"}]'
-   (the role needs events:InvokeApiDestination on that destination)
-The endpoint answers 202 immediately and runs the sweep in the background —
-API-destination timeouts are seconds, the sweep can take minutes.
+Same as before: connection (X-Job-Secret header) + API destination
+https://mytradelens.app/api/jobs/sync-flex + rule cron(0 9 ? * TUE-SAT *).
+The endpoint and its 202-then-background behavior are unaffected by the
+compute-layer change.
 EOS
 
 echo "Guide printed. Steps are manual by design (user-driven deployment)."
