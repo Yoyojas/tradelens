@@ -30,6 +30,7 @@ Cowork（分析/规格/审阅）与 Claude Code（开发执行）的正式交接
 | TL-DEPLOY-002 | 上线收尾三件套（自定义域 / Google 生产回调 / EventBridge 定时同步） | DELIVERED | 2026-07-17 七步全部完成，自动化验收全绿（含 Resend 无伤比对）；待用户手动验收三项 |
 | TL-FEAT-010 | Google 登录强制账号选择（prompt=select_account） | DELIVERED | 2026-07-17 交付并已上生产（CI 全绿 + 生产 302 探测含参数）；待用户点一次 Google 登录见账号列表 |
 | TL-FEAT-011 | 未登录页语言入口 + 浏览器语言自动检测 | DELIVERED | 返修完成并已上生产（2026-07-17 二次交付）：四页卡底语言下拉替换角落图标；待用户截图确认样式 |
+| TL-BUG-002 | Flex 连接失败可观测性（结构化 WARNING 日志） | APPROVED | 2026-07-18 用户生产排障发现失败零日志；修完后借日志定位其 Query/Token 问题 |
 | TL-FEAT-008 | 新用户 Onboarding | ACCEPTED | 待批次统一用户验收 |
 | TL-DATA-004 | Broker Connection Center + IBKR Flex 自动同步 | ACCEPTED | 待批次统一用户验收；每日任务承载已随 AWS 返修改为 EventBridge→job 端点 |
 | TL-DATA-005 | 行情与自选股（Alpaca IEX） | ACCEPTED | 待批次统一用户验收（需 Alpaca key） |
@@ -59,6 +60,20 @@ Backlog（未批准，不得开工）：password/set 登录态设密端点；Rep
 **自检（自动化证据）**：残留 grep 零命中；vite build 过；推送 23afd51 后 CI run 29630807911 全绿、rollout COMPLETED；**生产 bundle 哈希与本地构建一致（index-sFkMqjnC.js）且含 auth-lang-select**；health 200。检测逻辑未触碰（维持原交付，单测 13/13 无需重跑仍在案）。
 **发现项**：无。**不确定点**：无。**子代理使用**：0 个。
 **待用户手动验收**：四页卡底见语言下拉（显示当前语言本名），切换即时生效且刷新保持；窄屏核一眼。
+
+---
+
+## [Cowork → CC] TL-BUG-002 · Flex 连接失败可观测性 · APPROVED（2026-07-18）
+
+**风险等级**：Low（仅新增日志行，不改业务行为）。
+**背景**：用户 2026-07-18 生产排障：测试连接失败但 CloudWatch 零记录——业务级失败（IBKR 错误码映射后 4xx 返回）当前不打日志，生产无法诊断。
+**目标**：每次 Flex 测试连接/同步失败在后端留一条结构化 WARNING。
+**In Scope**：flex 服务失败路径打 WARNING，字段含：user_id、脱敏 query_id（明文可留，本身非密钥）、IBKR 原始错误码、我们的映射类别、阶段（SendRequest/GetStatement）、HTTP 状态；**严禁出现 token 任何形态**（含长度、前后缀）。测试连接与定时同步两条路径都覆盖。
+**Out of Scope**：日志聚合/告警；错误映射逻辑改动。**Do Not Touch**：错误码映射表；返回给前端的文案。**依赖**：无。
+**产品决定**：无新增（纯工程）。**技术约束**：D-012 日志卫生。**数据模型/API/i18n 影响**：无。
+**自动化验收**：冒烟触发一次失败断言日志行出现且不含 token 字样；既有 flex 冒烟不回归。
+**手动验收**：部署后用户点一次测试连接，CC 拉日志读出 IBKR 原始错误码并回报诊断结论。
+**停止条件**：无特殊。**不确定点处理**：常规。
 
 ---
 
