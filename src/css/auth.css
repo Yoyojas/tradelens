@@ -1,5 +1,6 @@
 /* Login / register screens */
 .auth-page {
+  position: relative; /* anchors the .auth-lang corner entry */
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -221,4 +222,11 @@
   padding: 1px 5px;
   border-radius: 4px;
   color: var(--color-text);
+}
+
+/* Language entry on logged-out screens (TL-FEAT-011) */
+.auth-lang {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
 }

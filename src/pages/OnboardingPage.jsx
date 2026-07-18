@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useLang } from '../i18n/LanguageContext.jsx'
+import LanguageMenu from '../components/LanguageMenu.jsx'
 import * as dataApi from '../services/data.js'
 import {
   EXPERIENCE_OPTIONS,
@@ -192,16 +193,20 @@ export default function OnboardingPage() {
       <div className="ob-card">
         <div className="ob-top">
           <span className="ob-brand">{t('common.appName')}</span>
-          <button
-            type="button"
-            className="ob-exit"
-            onClick={() => {
-              logout()
-              navigate('/login', { replace: true })
-            }}
-          >
-            {t('onboarding.safeExit')}
-          </button>
+          <div className="ob-top-actions">
+            {/* TL-FEAT-011: language entry outside the app shell */}
+            <LanguageMenu />
+            <button
+              type="button"
+              className="ob-exit"
+              onClick={() => {
+                logout()
+                navigate('/login', { replace: true })
+              }}
+            >
+              {t('onboarding.safeExit')}
+            </button>
+          </div>
         </div>
 
         <div

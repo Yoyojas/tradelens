@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { DICTS, DEFAULT_LANG } from './languages.js'
+import { DICTS, DEFAULT_LANG, detectBrowserLang } from './languages.js'
 import { setDateLocale } from '../utils/format.js'
 
 const LS_KEY = 'tradelens.lang'
@@ -13,10 +13,20 @@ function lookup(dict, key) {
 
 export function LanguageProvider({ children }) {
   const [lang, setLangState] = useState(() => {
+    // Explicit choice in localStorage wins; otherwise first visit detects
+    // the browser language (TL-FEAT-011); last resort DEFAULT_LANG.
     let initial = DEFAULT_LANG
     try {
       const stored = localStorage.getItem(LS_KEY)
-      if (stored && DICTS[stored]) initial = stored
+      if (stored && DICTS[stored]) {
+        initial = stored
+      } else {
+        initial = detectBrowserLang(
+          navigator.languages?.length
+            ? navigator.languages
+            : [navigator.language],
+        )
+      }
     } catch {
       /* ignore */
     }

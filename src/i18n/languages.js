@@ -22,6 +22,19 @@ export const DICTS = Object.fromEntries(LANGUAGES.map((l) => [l.code, l.dict]))
 export const LANGUAGE_CODES = LANGUAGES.map((l) => l.code)
 export const DEFAULT_LANG = 'en'
 
+// First-visit language detection (TL-FEAT-011): walk the browser's language
+// list in preference order and return the first whose PRIMARY subtag has a
+// dictionary (zh-CN / zh-TW -> zh, en-GB -> en). No match -> DEFAULT_LANG.
+// Pure so the mapping is unit-testable; only ever consulted when localStorage
+// holds no explicit choice — a manual switch always wins afterwards.
+export function detectBrowserLang(candidates) {
+  for (const raw of candidates || []) {
+    const primary = String(raw).toLowerCase().split('-')[0]
+    if (DICTS[primary]) return primary
+  }
+  return DEFAULT_LANG
+}
+
 // Intl locale used for date formatting per app language.
 export const DATE_LOCALES = {
   en: 'en-US',

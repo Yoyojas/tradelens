@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLang } from '../i18n/LanguageContext.jsx'
 import { LANGUAGES } from '../i18n/languages.js'
+import '../css/lang.css'
 
 // Globe-icon popover listing each language by its native name. Keyboard
 // accessible: Enter/Space/Esc, arrow keys to move, click-outside to dismiss.
