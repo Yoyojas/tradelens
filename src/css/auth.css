@@ -1,8 +1,8 @@
 /* Login / register screens */
 .auth-page {
-  position: relative; /* anchors the .auth-lang corner entry */
   min-height: 100vh;
   display: flex;
+  flex-direction: column; /* card + language footer stack (TL-FEAT-011) */
   align-items: center;
   justify-content: center;
   padding: var(--space-5);
@@ -224,9 +224,33 @@
   color: var(--color-text);
 }
 
-/* Language entry on logged-out screens (TL-FEAT-011) */
-.auth-lang {
-  position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
+/* Card-footer language selector (TL-FEAT-011 rework: user-picked pattern) */
+.auth-footer {
+  margin-top: var(--space-4);
+  display: flex;
+  justify-content: center;
+  max-width: 100%;
+}
+.auth-lang-select {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  max-width: 100%;
+}
+.auth-lang-select:hover {
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+.auth-lang-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+.auth-lang-select option {
+  background: var(--color-surface);
+  color: var(--color-text);
 }

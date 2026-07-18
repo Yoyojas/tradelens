@@ -4,7 +4,7 @@ import { errorKey, useAuth } from '../context/AuthContext.jsx'
 import { useLang } from '../i18n/LanguageContext.jsx'
 import { GOOGLE_LOGIN_URL } from '../services/auth.js'
 import PasswordInput from './PasswordInput.jsx'
-import LanguageMenu from './LanguageMenu.jsx'
+import AuthLangSelect from './AuthLangSelect.jsx'
 import '../css/auth.css'
 
 // Shared login / register card. `mode` is "login" or "register".
@@ -86,10 +86,6 @@ export default function AuthForm({ mode }) {
 
   return (
     <div className="auth-page">
-      {/* TL-FEAT-011: language entry on logged-out screens */}
-      <div className="auth-lang">
-        <LanguageMenu />
-      </div>
       <form className="auth-card" onSubmit={handleSubmit} noValidate>
         <div className="auth-brand">
           <span className="auth-brand-mark">◈</span> {t('common.appName')}
@@ -179,6 +175,7 @@ export default function AuthForm({ mode }) {
           </div>
         )}
       </form>
+      <AuthLangSelect />
     </div>
   )
 }

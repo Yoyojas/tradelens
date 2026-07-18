@@ -4,7 +4,7 @@ import { errorKey, useAuth } from '../context/AuthContext.jsx'
 import { useLang } from '../i18n/LanguageContext.jsx'
 import * as authApi from '../services/auth.js'
 import PasswordInput from '../components/PasswordInput.jsx'
-import LanguageMenu from '../components/LanguageMenu.jsx'
+import AuthLangSelect from '../components/AuthLangSelect.jsx'
 import '../css/auth.css'
 import '../css/verify.css'
 
@@ -85,10 +85,6 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="auth-page">
-      {/* TL-FEAT-011: language entry on logged-out screens */}
-      <div className="auth-lang">
-        <LanguageMenu />
-      </div>
       <div className="auth-card">
         <div className="auth-brand">
           <span className="auth-brand-mark">◈</span> {t('common.appName')}
@@ -190,6 +186,7 @@ export default function ForgotPasswordPage() {
           </div>
         )}
       </div>
+      <AuthLangSelect />
     </div>
   )
 }
