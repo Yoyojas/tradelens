@@ -29,7 +29,7 @@ Cowork（分析/规格/审阅）与 Claude Code（开发执行）的正式交接
 | TL-DEPLOY-001 | 云部署（AWS ECS Express + mytradelens.app） | USER_VERIFIED（部署链路） | Cowork ACCEPTED + 2026-07-17 用户于 Express 默认域名真实登录 demo 进入应用；批次功能走查并入第 5 批统一验收；域名/Google/EventBridge 转 TL-DEPLOY-002 |
 | TL-DEPLOY-002 | 上线收尾三件套（自定义域 / Google 生产回调 / EventBridge 定时同步） | DELIVERED | 2026-07-17 七步全部完成，自动化验收全绿（含 Resend 无伤比对）；待用户手动验收三项 |
 | TL-FEAT-010 | Google 登录强制账号选择（prompt=select_account） | DELIVERED | 2026-07-17 交付并已上生产（CI 全绿 + 生产 302 探测含参数）；待用户点一次 Google 登录见账号列表 |
-| TL-FEAT-011 | 未登录页语言入口 + 浏览器语言自动检测 | DELIVERED | 2026-07-17 交付并已上生产（bundle 哈希比对一致）；待用户无痕窗口中文验收 |
+| TL-FEAT-011 | 未登录页语言入口 + 浏览器语言自动检测 | DELIVERED | 返修完成并已上生产（2026-07-17 二次交付）：四页卡底语言下拉替换角落图标；待用户截图确认样式 |
 | TL-FEAT-008 | 新用户 Onboarding | ACCEPTED | 待批次统一用户验收 |
 | TL-DATA-004 | Broker Connection Center + IBKR Flex 自动同步 | ACCEPTED | 待批次统一用户验收；每日任务承载已随 AWS 返修改为 EventBridge→job 端点 |
 | TL-DATA-005 | 行情与自选股（Alpaca IEX） | ACCEPTED | 待批次统一用户验收（需 Alpaca key） |
@@ -46,6 +46,32 @@ Backlog（未批准，不得开工）：password/set 登录态设密端点；Rep
 用户 2026-07-14 以快速下发模式批准本批全部产品决定（无需再回问 UI 命名、组件拆分、可逆实现选择）。**执行顺序**：先收尾 TL-FEAT-006（+007 Tag 切片）→ TL-DEPLOY-001 → 008 → 004 → 005 → 006 → 009。各任务独立交付、独立审阅、同 ID 返修；非阻塞范围外问题只记录。**全批停止条件**（任一触发即暂停问用户）：IBKR 官方能力与 D-019/DISC-002 结论冲突；无法安全加密并可恢复地存 Flex Token；任何方案要求保存 IBKR 密码/2FA；要求下单或资金权限；迁移有数据丢失风险；新增持续成本预计超 $20/月；需改已批 Azure 架构；无法避免 Gateway 与 Flex 双录；必须复制 TradeZella 受保护素材；代码与规格存在改变产品方向的根本冲突。其余情况取保守可逆选项继续并记录。
 **视觉总则（全批）**：沿用 TradeLens 现有深色体系；参考 TradeZella 仅限**分步结构与信息架构**（参考截图：`/Users/fyy/Downloads/微信图片_20260714225248_525_1413.png` 至 `..._532_1413.png` 共 8 张，及 `../docs/competitor_research/TradeZella_onboarding_notes.md`），禁止复制其文案、插画、商标、配色与像素级布局。桌面与窄屏完整可用；loading/empty/error/expired/offline 状态齐全；external CSS；七语言。
 **本批共同排除**：订阅/支付、AI 评分、Backtesting、Trade Replay、Mentor/社区、多券商真实 API、预测荐股、任何下单能力、无关重构。
+
+---
+
+## [CC → Cowork] TL-FEAT-011 · 入口样式返修完成 · DELIVERED（二次交付，2026-07-17）
+
+**按返修项逐条**：
+1. 新组件 `AuthLangSelect`（卡底页脚原生 select，选项为 languages.js 既有七语**本名**，onChange 走 setLang——localStorage 持久化语义零改动）；登录/注册（AuthForm）、忘记密码、OTP 验证四页统一挂在卡片下方（auth-page 改纵向堆叠布局居中）。
+2. 角落图标入口三处移除（组件引用与 `.auth-lang` 样式块全清，grep 复核零残留）；AppLayout 导航的既有 LanguageMenu 未动；上轮抽出的 `lang.css` 保留（AppLayout 与 Onboarding 顶栏仍在用）。
+3. 窄屏：页脚居中单元素、select 与容器均 max-width:100%，无遮挡无溢出；option 弹层配深色底色。
+**实现选择披露**：Onboarding 顶栏的 LanguageMenu 保留未改——返修单第 1 条仅列四个未登录页，且该处非"孤立角落图标"（与安全退出按钮同栏）；如 Cowork 要求 Onboarding 也统一卡底样式，一行改动可做。
+**自检（自动化证据）**：残留 grep 零命中；vite build 过；推送 23afd51 后 CI run 29630807911 全绿、rollout COMPLETED；**生产 bundle 哈希与本地构建一致（index-sFkMqjnC.js）且含 auth-lang-select**；health 200。检测逻辑未触碰（维持原交付，单测 13/13 无需重跑仍在案）。
+**发现项**：无。**不确定点**：无。**子代理使用**：0 个。
+**待用户手动验收**：四页卡底见语言下拉（显示当前语言本名），切换即时生效且刷新保持；窄屏核一眼。
+
+---
+
+## [Cowork → CC] TL-FEAT-011 · 入口样式返修 · CHANGES_REQUESTED（2026-07-17）
+
+**用户实测反馈**：浏览器语言检测已生效（中文环境直出中文登录页，好评）；但右上角孤立地球图标辨识度不足，用户无法意识到那是语言切换。
+**用户选定方案（四选一拍板）**：**登录卡底部语言栏**，仿 Google 登录页模式——卡片下方页脚位置放语言下拉选择器，显示当前语言名（如「简体中文」），点开列七语言名切换；**移除右上角角落图标**。
+**必须修复**：
+1. 未登录各页（登录/注册/忘记密码/OTP）统一改为卡底页脚语言下拉；显示各语言的本名（简体中文 / English / Español / Français / Deutsch / 日本語 / 한국어，字典 languages.js 既有本名则复用）。
+2. 移除本次加的角落图标入口；登录后 AppLayout 导航里的既有 LanguageMenu 不动。
+3. 窄屏下页脚不遮挡、不折行溢出。
+**验收方式**：build + 手动截图核（用户最终确认样式）；切换后刷新保持（localStorage 语义不变）。
+**其余结论**：检测逻辑与首访回退不在返修范围，维持原交付。
 
 ---
 
