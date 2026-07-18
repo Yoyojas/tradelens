@@ -30,7 +30,7 @@ Cowork（分析/规格/审阅）与 Claude Code（开发执行）的正式交接
 | TL-DEPLOY-002 | 上线收尾三件套（自定义域 / Google 生产回调 / EventBridge 定时同步） | DELIVERED | 2026-07-17 七步全部完成，自动化验收全绿（含 Resend 无伤比对）；待用户手动验收三项 |
 | TL-FEAT-010 | Google 登录强制账号选择（prompt=select_account） | DELIVERED | 2026-07-17 交付并已上生产（CI 全绿 + 生产 302 探测含参数）；待用户点一次 Google 登录见账号列表 |
 | TL-FEAT-011 | 未登录页语言入口 + 浏览器语言自动检测 | DELIVERED | 返修完成并已上生产（2026-07-17 二次交付）：四页卡底语言下拉替换角落图标；待用户截图确认样式 |
-| TL-BUG-002 | Flex 连接失败可观测性（结构化 WARNING 日志） | APPROVED | 2026-07-18 用户生产排障发现失败零日志；修完后借日志定位其 Query/Token 问题 |
+| TL-BUG-002 | Flex 连接失败可观测性（结构化 WARNING 日志） | DELIVERED | 2026-07-18 交付并已上生产（冒烟 9/9 含 token 卫生）；等用户点测试连接做实弹诊断 |
 | TL-FEAT-008 | 新用户 Onboarding | ACCEPTED | 待批次统一用户验收 |
 | TL-DATA-004 | Broker Connection Center + IBKR Flex 自动同步 | ACCEPTED | 待批次统一用户验收；每日任务承载已随 AWS 返修改为 EventBridge→job 端点 |
 | TL-DATA-005 | 行情与自选股（Alpaca IEX） | ACCEPTED | 待批次统一用户验收（需 Alpaca key） |
@@ -60,6 +60,16 @@ Backlog（未批准，不得开工）：password/set 登录态设密端点；Rep
 **自检（自动化证据）**：残留 grep 零命中；vite build 过；推送 23afd51 后 CI run 29630807911 全绿、rollout COMPLETED；**生产 bundle 哈希与本地构建一致（index-sFkMqjnC.js）且含 auth-lang-select**；health 200。检测逻辑未触碰（维持原交付，单测 13/13 无需重跑仍在案）。
 **发现项**：无。**不确定点**：无。**子代理使用**：0 个。
 **待用户手动验收**：四页卡底见语言下拉（显示当前语言本名），切换即时生效且刷新保持；窄屏核一眼。
+
+---
+
+## [CC → Cowork] TL-BUG-002 · 实现完成并已上生产 · DELIVERED（2026-07-18）
+
+**改动**：`flex_service.FlexError` 增诊断上下文（raw_code/phase/http_status，SendRequest 与 GetStatement 两阶段全部 raise 点带上，`getattr` 取值保测试桩兼容）；新 `log_flex_failure()`——单行结构化 WARNING（logger `tradelens.flex`，默认经 stderr 入 CloudWatch）：`context/user_id/query_id/raw_code/mapped/phase/http_status`，**token 任何形态（含长度与前后缀）零出现**（D-012，docstring 明示）。接线两处：测试连接端点 except 与 `run_sync` except（context 分别为 `test_connection` 与 `sync:<kind>`）。错误码映射表与前端文案零改动（Do Not Touch 达成）。
+**自检（自动化证据）**：冒烟 9/9——测试连接失败 400 且恰一行 WARNING、字段全断言（raw_code=1015/mapped/phase=SendRequest/http_status=200/context/query_id/user_id 非 None）、GetStatement 阶段失败（1021→flex_query_invalid + phase=GetStatement）、定时同步路径 context=sync:scheduled、成功路径零日志、**token 全形态卫生扫描**；定点回归——退避序列 [2,4,8] 与 8 个官方码映射全过且 raw_code 随错误携带；py_compile、build 过。推送 fbbd6dc 后 CI run 29664183911 全绿、rollout COMPLETED、health 200。
+**发现项**：提交 abd6378 时不慎将 Cowork 当时未提交的本单规格条目一并带入（提交信息只写了交付记录，内容无害且本就该入库），记录备查。
+**不确定点**：无。**子代理使用**：0 个。
+**手动验收（进行中）**：用户点一次测试连接，CC 拉 CloudWatch 读原始码回报诊断结论（本单闭环动作）。
 
 ---
 
