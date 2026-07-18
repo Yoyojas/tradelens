@@ -565,7 +565,11 @@ def google_start():
         return redirect(f"{config.FRONTEND_URL}/login?error=oauth_not_configured")
     # authorize_redirect stores a random `state` in the session and sends the
     # browser to Google; the callback rejects any response whose state differs.
-    return client.authorize_redirect(config.GOOGLE_REDIRECT_URI)
+    # prompt=select_account (TL-FEAT-010): always show Google's account
+    # chooser instead of silently reusing the current session's account.
+    return client.authorize_redirect(
+        config.GOOGLE_REDIRECT_URI, prompt="select_account"
+    )
 
 
 @bp.get("/google/callback")
