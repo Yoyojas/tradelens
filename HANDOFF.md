@@ -29,6 +29,7 @@ Cowork（分析/规格/审阅）与 Claude Code（开发执行）的正式交接
 | TL-DEPLOY-001 | 云部署（AWS ECS Express + mytradelens.app） | USER_VERIFIED（部署链路） | Cowork ACCEPTED + 2026-07-17 用户于 Express 默认域名真实登录 demo 进入应用；批次功能走查并入第 5 批统一验收；域名/Google/EventBridge 转 TL-DEPLOY-002 |
 | TL-DEPLOY-002 | 上线收尾三件套（自定义域 / Google 生产回调 / EventBridge 定时同步） | DELIVERED | 2026-07-17 七步全部完成，自动化验收全绿（含 Resend 无伤比对）；待用户手动验收三项 |
 | TL-FEAT-010 | Google 登录强制账号选择（prompt=select_account） | DELIVERED | 2026-07-17 交付并已上生产（CI 全绿 + 生产 302 探测含参数）；待用户点一次 Google 登录见账号列表 |
+| TL-FEAT-011 | 未登录页语言入口 + 浏览器语言自动检测 | DELIVERED | 2026-07-17 交付并已上生产（bundle 哈希比对一致）；待用户无痕窗口中文验收 |
 | TL-FEAT-008 | 新用户 Onboarding | ACCEPTED | 待批次统一用户验收 |
 | TL-DATA-004 | Broker Connection Center + IBKR Flex 自动同步 | ACCEPTED | 待批次统一用户验收；每日任务承载已随 AWS 返修改为 EventBridge→job 端点 |
 | TL-DATA-005 | 行情与自选股（Alpaca IEX） | ACCEPTED | 待批次统一用户验收（需 Alpaca key） |
@@ -45,6 +46,46 @@ Backlog（未批准，不得开工）：password/set 登录态设密端点；Rep
 用户 2026-07-14 以快速下发模式批准本批全部产品决定（无需再回问 UI 命名、组件拆分、可逆实现选择）。**执行顺序**：先收尾 TL-FEAT-006（+007 Tag 切片）→ TL-DEPLOY-001 → 008 → 004 → 005 → 006 → 009。各任务独立交付、独立审阅、同 ID 返修；非阻塞范围外问题只记录。**全批停止条件**（任一触发即暂停问用户）：IBKR 官方能力与 D-019/DISC-002 结论冲突；无法安全加密并可恢复地存 Flex Token；任何方案要求保存 IBKR 密码/2FA；要求下单或资金权限；迁移有数据丢失风险；新增持续成本预计超 $20/月；需改已批 Azure 架构；无法避免 Gateway 与 Flex 双录；必须复制 TradeZella 受保护素材；代码与规格存在改变产品方向的根本冲突。其余情况取保守可逆选项继续并记录。
 **视觉总则（全批）**：沿用 TradeLens 现有深色体系；参考 TradeZella 仅限**分步结构与信息架构**（参考截图：`/Users/fyy/Downloads/微信图片_20260714225248_525_1413.png` 至 `..._532_1413.png` 共 8 张，及 `../docs/competitor_research/TradeZella_onboarding_notes.md`），禁止复制其文案、插画、商标、配色与像素级布局。桌面与窄屏完整可用；loading/empty/error/expired/offline 状态齐全；external CSS；七语言。
 **本批共同排除**：订阅/支付、AI 评分、Backtesting、Trade Replay、Mentor/社区、多券商真实 API、预测荐股、任何下单能力、无关重构。
+
+---
+
+## [CC → Cowork] TL-FEAT-011 · 实现完成并已上生产 · DELIVERED（2026-07-17）
+
+**改动**
+- 首访检测：`languages.js` 新增纯函数 `detectBrowserLang`（按 `navigator.languages` 偏好序做主子标签前缀匹配，zh-CN/zh-TW→zh、en-GB→en，大小写不敏感，无匹配回退 en）；`LanguageContext` 仅在 localStorage 无记录时调用，手动切换后仍以 localStorage 为准（既有语义零改动，未触碰停止条件）。
+- 语言入口：`LanguageMenu` 逻辑零改动，仅把 `.lang-*` 样式从 layout.css 抽为组件自带的 `css/lang.css`（组件内 import，挂载到哪里样式跟到哪里，AppLayout 表现不变）——对应规格"样式依赖则轻量包装"的关键假设，实际用抽离方案更干净。登录/注册（AuthForm）、忘记密码、OTP 验证三处 `.auth-page` 右上角挂 `.auth-lang` 定位入口（auth-page 补 position:relative 锚定）；**Onboarding 页核查确认无入口，一并补**（顶栏动作组：语言菜单 + 安全退出）。字典键零增改（aria 用 LanguageMenu 既有实现）。
+**自检（自动化证据）**：检测映射单测 **13/13**（规格 9 例：zh-CN/zh-TW/en-US/ja/ko-KR/de-AT/fr-CA/es-419/未知码回退，另加偏好序优先、空表、undefined、大小写 4 例；因七部 JSON 字典阻碍纯 Node 加载，测试对源文件**逐字提取函数体** + DICTS 键桩，被测代码即真实源码，方法已注明）；i18n 键集 551 × 7 零回归；vite build 过；推送 aefecae 后 CI run 29630090381 全绿、rollout COMPLETED；**生产 bundle 哈希与本地构建逐字一致（index-D59BIvMm.js）且含检测代码**，health 200。
+**发现项**：无。
+**不确定点**：检测行为属浏览器端逻辑，自动化只能验证到"生产 bundle 即本次构建"，语言实际呈现依赖用户手动验收（规格本就如此安排）。
+**子代理使用**：0 个。
+**待用户手动验收**：无痕窗口（浏览器设中文）开 mytradelens.app 应见中文登录页；右上角球形图标可切语言且刷新保持；Onboarding 页同样有入口。
+
+---
+
+## [Cowork → CC] TL-FEAT-011 · 未登录页语言入口 + 浏览器语言自动检测 · APPROVED（2026-07-17）
+
+**风险等级**：Medium（多页 UI 触点 + 首访检测逻辑，无数据面）。
+**背景**：用户 2026-07-17 要求登录/注册页多语种。Cowork 现状核查：auth 页文案已全量走 `useLang`/`t()` 七语字典，**真实缺口**是 ① `LanguageMenu` 仅挂在登录后的 `AppLayout`，未登录页无切换入口；② `LanguageContext` 首访无 localStorage 时直接落 `DEFAULT_LANG`，不读浏览器语言。
+**目标**：新访客以其浏览器语言（七语内）看到未登录页面，且页面上有语言切换入口。
+
+**事实与未知**：
+- 已确认事实：AuthForm/ForgotPasswordPage/VerifyEmailPage 均已用 t()；LanguageMenu 组件既存可复用；语言持久化在 localStorage。
+- 已知未知：无。
+- 关键假设：复用 LanguageMenu 无需改其内部逻辑（若其样式强依赖 AppLayout 布局则做轻量包装，不复制逻辑）。
+
+**In Scope**：
+1. 首访检测：无 localStorage 记录时按 `navigator.languages` 顺序匹配七语（前缀匹配，如 `zh-CN`→zh、`en-GB`→en），无匹配回退 en；用户手动切换后仍以 localStorage 为准（既有行为不变）。
+2. 语言入口：LanguageMenu 挂到全部未登录可达页——登录、注册、忘记密码、OTP 验证页（放置位置与样式由 CC 定，深色体系一致，桌面与窄屏可用）。
+3. Onboarding 页若无入口一并补（登录后但在 AppLayout 外的页面核查一遍）。
+**Out of Scope**：新增或改动任何字典键值；后端 Accept-Language 协商；语言偏好入库。
+**Do Not Touch**：七部字典内容；D-007/D-008 约定。
+**依赖**：无。
+
+**产品决定**：浏览器语言自动检测 + 全部未登录页有切换入口（用户 2026-07-17）。**技术约束**：D-007（缺键回退 en 机制不动）；external CSS。**数据模型影响 / API 影响**：无。**i18n 影响**：无新键（如放置处需 aria 文案且字典已有则复用）。**安全与隐私**：无。
+**自动化验收**：检测映射纯函数单测（zh-CN/zh-TW/en-US/ja/ko/de/fr/es/未知码回退各一例）；vite build；i18n 键集校验不回归。
+**手动验收（用户）**：无痕窗口（浏览器设中文）开 mytradelens.app 应见中文登录页；页面上可切语言且刷新后保持。
+**停止条件**：需改动 LanguageContext 存储语义之外的会话/auth 逻辑时停。
+**不确定点处理**：常规。
 
 ---
 
