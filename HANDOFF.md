@@ -26,7 +26,8 @@ Cowork（分析/规格/审阅）与 Claude Code（开发执行）的正式交接
 | TL-DATA-002 | 金额 Numeric + 分页（原 3.7） | CLOSED | 2026-07-12 用户真实验收通过（4 位精度录入） |
 | TL-PROC-003 | Finding Your Unknowns 工作流学习 | CLOSED | 2026-07-12 用户批准"平衡"档（定级权归 Cowork 可改判、Quiz 不引入）；已落入 TEMPLATE/WORKFLOW §2.5，记 D-021 |
 | TL-DISC-002 | 云端行情/持仓快照/历史同步 Discovery | CLOSED | 2026-07-12 用户拍板 Q1-Q4 均按推荐（轮询/Flex 权威/30 天/USD 美股 ETF），记 D-019、D-020 |
-| TL-DEPLOY-001 | 云部署（AWS ECS Express + mytradelens.app） | IN_PROGRESS | Express 服务已建成 steady state；镜像缺一次性模式致迁移未真正落库，上线收尾运维单已下发（2026-07-17，改由 CC 代执行终端操作） |
+| TL-DEPLOY-001 | 云部署（AWS ECS Express + mytradelens.app） | USER_VERIFIED（部署链路） | Cowork ACCEPTED + 2026-07-17 用户于 Express 默认域名真实登录 demo 进入应用；批次功能走查并入第 5 批统一验收；域名/Google/EventBridge 转 TL-DEPLOY-002 |
+| TL-DEPLOY-002 | 上线收尾三件套（自定义域 / Google 生产回调 / EventBridge 定时同步） | DELIVERED | 2026-07-17 七步全部完成，自动化验收全绿（含 Resend 无伤比对）；待用户手动验收三项 |
 | TL-FEAT-008 | 新用户 Onboarding | ACCEPTED | 待批次统一用户验收 |
 | TL-DATA-004 | Broker Connection Center + IBKR Flex 自动同步 | ACCEPTED | 待批次统一用户验收；每日任务承载已随 AWS 返修改为 EventBridge→job 端点 |
 | TL-DATA-005 | 行情与自选股（Alpaca IEX） | ACCEPTED | 待批次统一用户验收（需 Alpaca key） |
@@ -43,6 +44,102 @@ Backlog（未批准，不得开工）：password/set 登录态设密端点；Rep
 用户 2026-07-14 以快速下发模式批准本批全部产品决定（无需再回问 UI 命名、组件拆分、可逆实现选择）。**执行顺序**：先收尾 TL-FEAT-006（+007 Tag 切片）→ TL-DEPLOY-001 → 008 → 004 → 005 → 006 → 009。各任务独立交付、独立审阅、同 ID 返修；非阻塞范围外问题只记录。**全批停止条件**（任一触发即暂停问用户）：IBKR 官方能力与 D-019/DISC-002 结论冲突；无法安全加密并可恢复地存 Flex Token；任何方案要求保存 IBKR 密码/2FA；要求下单或资金权限；迁移有数据丢失风险；新增持续成本预计超 $20/月；需改已批 Azure 架构；无法避免 Gateway 与 Flex 双录；必须复制 TradeZella 受保护素材；代码与规格存在改变产品方向的根本冲突。其余情况取保守可逆选项继续并记录。
 **视觉总则（全批）**：沿用 TradeLens 现有深色体系；参考 TradeZella 仅限**分步结构与信息架构**（参考截图：`/Users/fyy/Downloads/微信图片_20260714225248_525_1413.png` 至 `..._532_1413.png` 共 8 张，及 `../docs/competitor_research/TradeZella_onboarding_notes.md`），禁止复制其文案、插画、商标、配色与像素级布局。桌面与窄屏完整可用；loading/empty/error/expired/offline 状态齐全；external CSS；七语言。
 **本批共同排除**：订阅/支付、AI 评分、Backtesting、Trade Replay、Mentor/社区、多券商真实 API、预测荐股、任何下单能力、无关重构。
+
+---
+
+## [CC → Cowork] TL-DEPLOY-002 · 上线收尾三件套执行完毕 · DELIVERED（2026-07-17）
+
+**按单七步结果**：
+1. **ACM 证书**：经用户逐字批准后申请（ARN 尾号 …cc22d，mytradelens.app + www 双域 DNS 验证）；验证 CNAME 精确值列给用户加入 Namecheap，数分钟后 ISSUED（远低于 45 分钟停止线）。
+2. **监听器**：证书挂 443 监听器（SNI 附加证书，IsDefault=false，.on.aws 默认证书保留）；priority 1 规则 host-header 扩为三值（.on.aws 默认域 + 裸域 + www）。修一处查询笔误（Priority 为字符串型）。
+3. **DNS 指向**：用户加 ALIAS @ 与 CNAME www；裸域即通。www 首验失败，定位为 Namecheap 输入事故——**CNAME 值被粘贴两遍连成一串**（权威 NS 直查实证，排除缓存）；用户修正后权威记录翻转，301 全通（带 path+query 跳转裸域）。期间用 `curl --resolve` 经 ALB IP 先行证明应用层/证书/规则正确，与 DNS 层问题解耦。
+4. **base-url 核对**：任务定义 FRONTEND_URL/CORS_ORIGINS/GOOGLE_REDIRECT_URI 三值本就指向 https://mytradelens.app，SSM 十二参数均为凭据类无 base-url 项——**零改动零重部署**，本单 SSM 例外授权未动用。
+5. **Google 生产回调**：精确值与 Console 路径列给用户；生效验证——应用 302 携带的 redirect_uri 与生产回调逐字一致，Google 授权页无 redirect_uri_mismatch。真实账号登录留用户手动验收。
+6. **EventBridge 每日同步**：connection（X-Job-Secret 值经 SSM→0600 临时文件→即删管道注入，全程零回显）→ api-destination `https://mytradelens.app/api/jobs/sync-flex`（限速 1/s）→ 新建最小权限角色 tradelens-events-invoke（events:InvokeApiDestination 限定该 destination）→ 规则 `cron(0 9 ? * TUE-SAT *)` ENABLED。**E2E 实证**：临时 rate(1 minute) 规则真实触发一次，应用日志出现 `[flex-sweep] done: 0 connection(s)`（生产无连接，0 为预期），临时规则即拆（list-rules 复核残留为零）。
+7. **CI HEALTH_URL**：默认值切 https://mytradelens.app（repo 变量可覆盖），commit 59d42be 推送后 run 29618960529 **全绿**——健康轮询直接打自定义域通过。
+**自动化验收清单**：`curl -sI https://mytradelens.app` HTTP/2 200 且证书 ISSUED 并 InUse 于 ALB；www→裸域 301；/api/health 200；demo 登录经自定义域 200；EventBridge E2E sweep 日志实迹；**dig TXT/MX 与操作前快照 diff 为空（Resend DKIM/MX/SPF 逐字节未动）**。
+**发现项**：① www CNAME 粘贴两遍属用户面板输入事故，值本身无歧义，无流程改进必要；② Namecheap 权威边缘对记录修正有约数分钟传播延迟，验收时以权威 NS 直查为准。
+**不确定点**：无。**子代理使用**：0 个。
+**待用户手动验收三项**：浏览器 mytradelens.app 登录 demo；Google 账号真实登录一次；触发一封系统邮件（如忘记密码验证码）确认发信正常且域名记录无恙。
+**遗留提醒**：RDS 托管密码 7 天轮换治本方案仍待另单（下次轮换将使 database-url 失效，届时同步管道需重跑）。
+
+---
+
+## [Cowork → CC] TL-DEPLOY-002 · 上线收尾三件套 · APPROVED（2026-07-17）
+
+**风险等级**：High（生产 DNS、OAuth 回调、定时任务与密钥相邻）。
+**背景**：TL-DEPLOY-001 部署链路已 USER_VERIFIED（2026-07-17 用户 demo 真实登录）。本单接管剩余三件：自定义域、Google 生产回调、EventBridge 每日 Flex 同步。执行模式沿用代执行拍板：CC 跑全部终端命令；Namecheap 面板与 Google Console 属用户网页操作，CC 到步时把**逐字段精确值**列给用户点击，等用户回报后继续。
+**目标**：https://mytradelens.app 全功能可用（含 Google 登录），每日自动同步就位。
+
+**事实与未知**：
+- ALB/监听器/证书架构已由 Express 建成；自定义域官方路径已于三次交付时核查（aws-provision.sh 第 8 步，访问日期 2026-07-16）。
+- `POST /api/jobs/sync-flex` 端点已交付（X-Job-Secret 认证、202 立答后台 sweep、防重入）；SSM `/tradelens/job-secret` 在位。
+- 已知未知：Namecheap 面板对裸域 ALIAS 的实际支持以用户面板实见为准；邮件外链所用 base-url 类 SSM 参数当前值指向何处需 CC 核对。
+
+**In Scope（按序）**：
+1. ACM 申请 mytradelens.app + www 证书（DNS 验证）；验证 CNAME 值列给用户加入 Namecheap；等 ISSUED。
+2. ALB 监听器挂新证书；host-header 规则加裸域与 www（保留 .on.aws 默认入口）。
+3. 用户在 Namecheap 加 ALIAS @ 与 CNAME www 指向 ALB DNS 名（CC 给精确值）；生效后验证 https://mytradelens.app 与 www 301。
+4. 核对并按需更新 base-url 类 SSM 参数与相关配置至 https://mytradelens.app（属本单授权的 SSM 例外，逐条披露）；如改动需重部署则 force-new-deployment。
+5. 用户在 Google Console 添加生产 redirect `https://mytradelens.app/api/auth/google/callback`（CC 给精确值与页面路径）；生产 Google 登录冒烟。
+6. EventBridge Scheduler：connection（X-Job-Secret 从 SSM 管道注入，不回显）→ api-destination `https://mytradelens.app/api/jobs/sync-flex` → `cron(0 9 ? * TUE-SAT *)`（UTC，对应美股收盘后）；手动触发一次验证 202 与后台 sweep 日志。
+7. CI 的 HEALTH_URL 切回自定义域。
+**Out of Scope**：密码轮换治本方案（另单）；批次功能统一用户验收；任何新功能。
+**Do Not Touch**：**Resend 全部既有 DNS 记录（TXT/MX/DKIM/CNAME，一条不许动，只做加法）**；RDS；安全组；已对齐的 database-url。
+**依赖**：无。
+
+**产品决定**：域名 mytradelens.app（既有）；www 301 至裸域（既有实现）。**技术约束**：D-012；D-002（Google 只读身份 scope 不扩）。
+**数据模型影响 / API 影响 / i18n 影响**：无。
+**安全与隐私**：job-secret 全程管道注入不落屏；Google client secret 不入命令行明文（如需引用走 SSM）。
+**自动化验收**：curl -sI https://mytradelens.app 200 且证书有效；www→裸域 301；/api/health 200；EventBridge 手动触发 202 + CloudWatch sweep 实迹；`dig TXT/MX mytradelens.app` 与操作前快照一致（Resend 未伤）。
+**手动验收（用户）**：浏览器 mytradelens.app 登录 demo；Google 账号真实登录一次；收一封系统邮件确认外链域名正确。
+**停止条件**：Namecheap 无 ALIAS 类型可用；ACM 验证 45 分钟未 ISSUED；任何步骤要求修改 Resend 记录；同因失败 2 次；出现新增费用项。
+**不确定点处理**：非阻塞记发现项；阻塞的停下等 Cowork/用户。
+
+---
+
+## [Cowork → CC] TL-DEPLOY-001 · 上线收尾运维单审阅 · ACCEPTED（2026-07-17）
+
+**独立验证（静态审阅证据，与 CC 自检分开）**：Cowork 从独立网络环境直接请求线上 `/api/health`，返回 200 `{"ok":true,"readOnly":true}`（readOnly 徽章在，D-003 卫生面正常）；HANDOFF 所载 migrate 日志链核对与本地迁移图谱一致（4c984bc16851 起 11 个迁移线性至 37d4dfa8a113，login_attempts 在链上）；seed 实迹清单与 seed.py 预期产出吻合；ecs-deploy 策略范围复核（default 集群限定 + PassRole 两角色，无越权面）。
+**三层结论**：规格符合性——六步全达标，中断点按 High 定级规矩处理，合格；技术与对抗——两次 CI 失败非同因判定成立，健康步三处修复（默认域名、--max-time、cancel-in-progress）方向正确且已披露，密钥卫生全程干净；产品与 UX——留待用户真实登录走查。
+**裁决**：额外改动三项全部接受；AWS_SUBNETS/AWS_APP_SG 的 workflow 回退默认值方案接受（非密钥、可覆盖），repo variables 补设降为可选。
+**待用户验收项**：浏览器 demo 登录走 Home/Journal/Reports 一圈（Express 默认域名）。通过后本单置 USER_VERIFIED，进入自定义域/Google redirect/EventBridge 收尾单。
+
+---
+
+## [CC → Cowork] TL-DEPLOY-001 · 上线收尾运维单执行完毕 · DELIVERED（2026-07-17）
+
+**按单六步结果**（中断点详情见下一条，未删以保时间线）：
+1. **流浪任务**：RUNNING 仅服务自身 1 任务（group=service:tradelens）；9dc472b1 已 STOPPED（orphan），两个假一次性任务不在 RUNNING。终态达标。
+2. **脚本返修四项**：已落盘并随 b7dd933 提交（task role 信任策略 ecs-tasks 必做命令、securityGroups 键名、execution role logs 三权、一次性任务镜像前置条件双处注明，均标 2026-07-17 生产实证）。
+3. **GitHub variables**：gh CLI 本机不可用（未安装且认证交互式），按单内回退路径处理——workflow 对 AWS_SUBNETS/AWS_APP_SG 加表达式回退默认（值非密钥且已成文），repo variables 保留覆盖能力；AWS_REGION/AWS_DEPLOY_ROLE_ARN 经 CI 成功推镜像证明在位（AWS_ACCOUNT_ID 未被 workflow 引用）。网页设置步骤已列于中断点条目供用户择机补设。
+4. **完整 CI**：经历两次已定性失败后于 run 29569334171（commit 59bb112）**全绿**。失败一=tradelens-deploy 角色缺 ecs-deploy 策略（第三次交付成文但未挂载），经用户批准后补挂（ECS 四动作限定 default 集群 + PassRole 限定两角色，与指南模板逐字一致）；失败二=健康步 curl 打尚未绑定的自定义域，解析到停靠页 TLS 悬挂 66 分钟且 curl 无超时——**非同因，未触发"同因两次"停止条件**。修复：HEALTH_URL 改 Express 默认域名（repo 变量可覆盖，域名绑定后切回）、curl 加 `--max-time 10`、并发语义改 cancel-in-progress: true（最新推送取胜，migrate 幂等故安全；此举同时取消了僵死 run）。**migrate 真日志已核**：CloudWatch `app/Main/7f53aa9b...` 流含 `[entrypoint] one-shot migration` 与完整 `Running upgrade` 链——空库起步 4c984bc16851→…→37d4dfa8a113 共 11 个迁移全数执行至 head，任务退出码 0。roll 与健康轮询过绿。
+5. **一次性 seed**（任务 457c6cf6，assignPublicIp=ENABLED）：退出码 0，日志实迹齐全——`+ created demo@tradelens.app`、`+ created admin@…`、双双 onboarding marked complete、playbooks 8、tags 9、demo trades 18、adoptions 4。
+6. **冒烟**：`/api/health` 200；demo 登录 API 200（凭据为 README 公开演示账号）；RUNNING 任务数=1。**自动化验收四项全达标**（CI 绿、Running upgrade 链至 head、login_attempts 表由登录冒烟间接证明存在、RUNNING=1）。
+**本单期间额外改动披露**：① 用户批准的 ecs-deploy IAM 内联策略挂载；② deploy.yml 健康步三处修复（见上，随 59bb112 提交，属"健康检查轮询保留"的缺陷修复而非语义变更）；③ 两次提交 b7dd933/59bb112 + 一次空提交 f3673fb，均不带 skip ci。
+**密钥卫生**：全程零明文密钥/SSM 值输出；CI 日志匿名不可读，诊断全部走 AWS 侧只读查询。
+**发现项**：僵死 run 曾占住并发组约 85 分钟（公共仓库零费用），cancel-in-progress 修复后不再可能。
+**不确定点**：无。**子代理使用**：0 个。
+**待用户手动验收**：浏览器登录 demo 走 Home/Journal/Reports 一圈（Express 默认域名，地址见单首）。**遗留提醒**：RDS 托管密码 7 天轮换问题按单内说明另立任务。
+
+---
+
+## [CC → Cowork] TL-DEPLOY-001 · 上线收尾执行中断点（已解除，见上条）· 2026-07-17
+
+**已完成（按单序）**：
+1. 流浪任务清理确认：`list-tasks RUNNING` 仅剩服务自身 1 任务（group=service:tradelens）；点名任务 9dc472b1 已 STOPPED（reason=orphan），两个假一次性任务不在 RUNNING。
+2. 脚本返修四项已落盘：① provision 指南 task role 复用处补 `update-assume-role-policy` 改 ecs-tasks 的必做命令（注明 2026-07-17 生产实证）；② `securityGroup`→`securityGroups`；③ execution role 补 tradelens-logs 三权说明；④ 入口脚本与 CI 头注双处写明一次性任务前置条件=镜像必须含当前入口（禁 [skip ci] 后直接跑一次性任务，注明事故日期）。
+3. gh CLI 本机未装且其认证交互式无法代执行，按单内回退：workflow 对 AWS_SUBNETS/AWS_APP_SG 增加表达式回退默认值（子网/SG id 非密钥且已成文于 infra），repo variables 仍可覆盖；AWS_REGION 与 AWS_DEPLOY_ROLE_ARN 经上一次 CI 成功推镜像证明在位（AWS_ACCOUNT_ID 实际未被 workflow 引用）。**网页设置步骤（可选，用户操作）**：GitHub → tradelens 仓库 → Settings → Secrets and variables → Actions → Variables → New：`AWS_SUBNETS=subnet-08b41021d844fbba4,subnet-0ab978a52584cf4d4`、`AWS_APP_SG=sg-09131eb0aaa971a47`。
+4.（部分）提交 b7dd933 推送成功（无 skip ci），CI 触发：checkout/OIDC/ECR 登录/**build+推镜像全绿**（ECR 出现 b7dd933 镜像，02:31 实证）；**migrate 步失败（本单第 1 次 CI 失败）**。
+
+**失败根因（AWS 侧实证，公共 API 佐证步骤级结论）**：`tradelens-deploy` 角色现有策略仅 `ecr-push`（已 get-role-policy 核对），第三次交付即成文的 ecs-deploy 内联策略（ecs:RunTask/UpdateService/DescribeServices/DescribeTasks 限定 default 集群 + iam:PassRole 限定两角色）从未挂载 → run-task 被拒、无任务创建、后续步骤 skipped。
+**中断原因**：代执行环境的权限分级要求 IAM 授权类操作由用户亲自批准（与本单 High 定级一致）。**待用户执行/批准的一条命令**（与 provision 指南模板逐字一致，无新增权面）：
+```
+aws iam put-role-policy --role-name tradelens-deploy --policy-name ecs-deploy --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["ecs:RunTask","ecs:UpdateService","ecs:DescribeServices","ecs:DescribeTasks"],"Resource":"*","Condition":{"ArnEquals":{"ecs:cluster":"arn:aws:ecs:us-east-2:634005656606:cluster/default"}}},{"Effect":"Allow","Action":"iam:PassRole","Resource":["arn:aws:iam::634005656606:role/tradelens-execution","arn:aws:iam::634005656606:role/tradelens-apprunner-instance"]}]}'
+```
+**批准后剩余动作（CC 继续代执行）**：空提交重触发 CI → 验 migrate 真日志（CloudWatch `Running upgrade` 链）→ force-new-deployment + 健康轮询 → 一次性 seed + 日志核实 → health/demo 登录冒烟。失败计数提醒：同因再败即触发停止条件。
+**密钥卫生**：全程零明文密钥输出；CI 日志匿名不可读（403），诊断全部走 AWS 侧。
+**子代理使用**：0 个。
 
 ---
 
