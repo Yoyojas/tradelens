@@ -16,6 +16,7 @@ Responsibilities:
 
 Read-only by design: this module only READS statements (D-003).
 """
+import logging
 import re
 import threading
 import time
@@ -44,13 +45,38 @@ MAX_POLL_ATTEMPTS = 5
 SYNC_RUN_RETENTION_DAYS = 90
 
 
+logger = logging.getLogger("tradelens.flex")
+
+
 class FlexError(Exception):
     """Sync failure with a stable, translatable code (never contains the
-    token or any response body)."""
+    token or any response body). Diagnostic context (TL-BUG-002) rides along
+    for the failure log: the RAW IBKR error code, which request phase failed
+    (SendRequest / GetStatement), and the HTTP status."""
 
-    def __init__(self, code):
+    def __init__(self, code, raw_code=None, phase=None, http_status=None):
         super().__init__(code)
         self.code = code
+        self.raw_code = raw_code
+        self.phase = phase
+        self.http_status = http_status
+
+
+def log_flex_failure(context, user_id, query_id, exc):
+    """One structured WARNING per business-level Flex failure (TL-BUG-002).
+    query_id is not a secret and stays plaintext; the token must NEVER appear
+    here in any form — not even its length or a prefix/suffix (D-012)."""
+    logger.warning(
+        "flex-failure context=%s user_id=%s query_id=%s raw_code=%s "
+        "mapped=%s phase=%s http_status=%s",
+        context,
+        user_id,
+        query_id,
+        getattr(exc, "raw_code", None),
+        getattr(exc, "code", type(exc).__name__),
+        getattr(exc, "phase", None),
+        getattr(exc, "http_status", None),
+    )
 
 
 # ── Token encryption ─────────────────────────────────────────────
@@ -176,24 +202,35 @@ def _flex_error_code(error_code):
 
 def fetch_statement(token, query_id, http=requests, sleep=time.sleep):
     """SendRequest -> poll GetStatement until the XML statement arrives.
-    `http` and `sleep` are injectable for tests. Never logs the token."""
+    `http` and `sleep` are injectable for tests. Never logs the token.
+    FlexErrors carry raw_code/phase/http_status for the failure log
+    (TL-BUG-002); getattr with defaults keeps test stubs compatible."""
     try:
         resp = http.get(
             SEND_URL, params={"t": token, "q": query_id, "v": "3"}, timeout=30
         )
     except requests.RequestException:
-        raise FlexError("flex_unreachable")
+        raise FlexError("flex_unreachable", phase="SendRequest")
+    http_status = getattr(resp, "status_code", None)
     try:
         root = ET.fromstring(resp.text)
     except ET.ParseError:
-        raise FlexError("flex_parse_error")
+        raise FlexError(
+            "flex_parse_error", phase="SendRequest", http_status=http_status
+        )
     status = (root.findtext("Status") or "").strip()
     if status != "Success":
-        raise FlexError(_flex_error_code((root.findtext("ErrorCode") or "").strip()))
+        raw = (root.findtext("ErrorCode") or "").strip()
+        raise FlexError(
+            _flex_error_code(raw),
+            raw_code=raw or None,
+            phase="SendRequest",
+            http_status=http_status,
+        )
     reference = (root.findtext("ReferenceCode") or "").strip()
     base_url = (root.findtext("Url") or "").strip()
     if not reference or not base_url:
-        raise FlexError("flex_error")
+        raise FlexError("flex_error", phase="SendRequest", http_status=http_status)
 
     delay = 2
     for attempt in range(MAX_POLL_ATTEMPTS):
@@ -203,23 +240,31 @@ def fetch_statement(token, query_id, http=requests, sleep=time.sleep):
                 base_url, params={"t": token, "q": reference, "v": "3"}, timeout=60
             )
         except requests.RequestException:
-            raise FlexError("flex_unreachable")
+            raise FlexError("flex_unreachable", phase="GetStatement")
         text = resp.text
+        http_status = getattr(resp, "status_code", None)
         # A ready statement starts with FlexQueryResponse; the "still
         # generating" envelope is a FlexStatementResponse with an ErrorCode.
         if "<FlexStatementResponse" in text[:200]:
             try:
                 root = ET.fromstring(text)
             except ET.ParseError:
-                raise FlexError("flex_parse_error")
+                raise FlexError(
+                    "flex_parse_error", phase="GetStatement", http_status=http_status
+                )
             code = (root.findtext("ErrorCode") or "").strip()
             mapped = _flex_error_code(code)
             if mapped in ("flex_not_ready", "flex_rate_limited") and attempt < MAX_POLL_ATTEMPTS - 1:
                 delay *= 2  # exponential backoff: 2,4,8,16s
                 continue
-            raise FlexError(mapped)
+            raise FlexError(
+                mapped,
+                raw_code=code or None,
+                phase="GetStatement",
+                http_status=http_status,
+            )
         return text
-    raise FlexError("flex_not_ready")
+    raise FlexError("flex_not_ready", phase="GetStatement")
 
 
 # ── Sync execution ───────────────────────────────────────────────
@@ -263,6 +308,7 @@ def run_sync(connection, kind, http=requests, sleep=time.sleep):
         connection.last_sync_at = utcnow()
         connection.next_sync_at = utcnow() + timedelta(days=1)
     except (FlexError, ImportConflict) as exc:
+        log_flex_failure(f"sync:{kind}", connection.user_id, connection.query_id, exc)
         run.status = "error"
         run.error_code = exc.code if isinstance(exc, FlexError) else "conflict"
         if run.error_code == "flex_token_expired":

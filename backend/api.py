@@ -737,6 +737,10 @@ def test_connection():
         xml_text = flex_service.fetch_statement(inputs["token"], inputs["queryId"])
         executions, non_stock, bad = flex_service.parse_flex_xml(xml_text)
     except flex_service.FlexError as exc:
+        # TL-BUG-002: business-level failures must be diagnosable server-side.
+        flex_service.log_flex_failure(
+            "test_connection", current_user.id, inputs["queryId"], exc
+        )
         status = 503 if exc.code in ("flex_key_missing", "flex_unreachable") else 400
         return _err(exc.code, status)
     return jsonify(
