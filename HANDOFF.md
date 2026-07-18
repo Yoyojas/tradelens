@@ -28,6 +28,7 @@ Cowork（分析/规格/审阅）与 Claude Code（开发执行）的正式交接
 | TL-DISC-002 | 云端行情/持仓快照/历史同步 Discovery | CLOSED | 2026-07-12 用户拍板 Q1-Q4 均按推荐（轮询/Flex 权威/30 天/USD 美股 ETF），记 D-019、D-020 |
 | TL-DEPLOY-001 | 云部署（AWS ECS Express + mytradelens.app） | USER_VERIFIED（部署链路） | Cowork ACCEPTED + 2026-07-17 用户于 Express 默认域名真实登录 demo 进入应用；批次功能走查并入第 5 批统一验收；域名/Google/EventBridge 转 TL-DEPLOY-002 |
 | TL-DEPLOY-002 | 上线收尾三件套（自定义域 / Google 生产回调 / EventBridge 定时同步） | DELIVERED | 2026-07-17 七步全部完成，自动化验收全绿（含 Resend 无伤比对）；待用户手动验收三项 |
+| TL-FEAT-010 | Google 登录强制账号选择（prompt=select_account） | DELIVERED | 2026-07-17 交付并已上生产（CI 全绿 + 生产 302 探测含参数）；待用户点一次 Google 登录见账号列表 |
 | TL-FEAT-008 | 新用户 Onboarding | ACCEPTED | 待批次统一用户验收 |
 | TL-DATA-004 | Broker Connection Center + IBKR Flex 自动同步 | ACCEPTED | 待批次统一用户验收；每日任务承载已随 AWS 返修改为 EventBridge→job 端点 |
 | TL-DATA-005 | 行情与自选股（Alpaca IEX） | ACCEPTED | 待批次统一用户验收（需 Alpaca key） |
@@ -62,6 +63,29 @@ Backlog（未批准，不得开工）：password/set 登录态设密端点；Rep
 **不确定点**：无。**子代理使用**：0 个。
 **待用户手动验收三项**：浏览器 mytradelens.app 登录 demo；Google 账号真实登录一次；触发一封系统邮件（如忘记密码验证码）确认发信正常且域名记录无恙。
 **遗留提醒**：RDS 托管密码 7 天轮换治本方案仍待另单（下次轮换将使 database-url 失效，届时同步管道需重跑）。
+
+---
+
+## [CC → Cowork] TL-FEAT-010 · 实现完成并已上生产 · DELIVERED（2026-07-17）
+
+**改动**：`auth.py` google_start 的 `authorize_redirect` 增 `prompt="select_account"`（authlib 透传为 authorize URL 查询参数），附注释注明用途。scope 未动（D-002）、回调与 session 零改动（Do Not Touch 达成）。提交 60809fa。
+**自检（自动化证据）**：py_compile 过；本地 302 冒烟断言 authorize URL 含 `prompt=select_account` 且 redirect_uri 在位；推送后 CI run 29628267066 全绿（build→migrate 幂等→canary→健康轮询）；**生产 302 探测**——rollout COMPLETED 后 authorize URL 实测含 `prompt=select_account`，health 200，RUNNING 任务数回到 1。过程记录：rollout 窗口内首次探测命中旧任务（Canary 双任务并存的预期现象），等 COMPLETED 后复测通过。
+**发现项**：无。**不确定点**：无。**子代理使用**：0 个。
+**待用户手动验收**：生产点 Continue with Google 应出现账号选择列表。
+
+---
+
+## [Cowork → CC] TL-FEAT-010 · Google 登录强制账号选择 · APPROVED（2026-07-17）
+
+**风险等级**：Low（单参数改动，既有 OAuth 流内）。
+**背景**：用户在生产实测发现点 Continue with Google 静默直选当前账号，无法换号；2026-07-17 拍板加账号选择画面。
+**目标**：每次发起 Google 登录都出现 Google 账号选择界面。
+**In Scope**：授权请求加 `prompt=select_account`（authorize 参数处，实现位置由 CC 定）。
+**Out of Scope**：scope 变化（D-002 不动）、其它登录流改动。**Do Not Touch**：回调处理、session 逻辑。**依赖**：无。
+**产品决定**：用户 2026-07-17 拍板要选择画面。**技术约束**：D-002。**数据模型影响 / API 影响 / i18n 影响**：无。**安全与隐私**：无新增。
+**自动化验收**：authorize 跳转 URL 含 `prompt=select_account`（现有 302 探测冒烟延伸一条断言）。
+**手动验收（用户）**：生产点 Continue with Google 出现账号列表。
+**停止条件**：无特殊。**不确定点处理**：常规。
 
 ---
 
